@@ -3,7 +3,7 @@
 
 ## Project Title
 
-**Write the full title of your project here**
+**COGNIFORGE: A Verified Multi-Agent Architecture for Contingency-Aware, Audit-Traceable Robot Teleoperation in WebXR**
 
 ---
 
@@ -11,16 +11,16 @@
 
 | Sr. No. | Name of Student | Roll No. | Branch | Email ID |
 |---|---|---|---|---|
-| 1 |  |  |  |  |
-| 2 |  |  |  |  |
-| 3 |  |  |  |  |
-| 4 |  |  |  |  |
+| 1 | ANAMIKA AHUJA | 01 | AURO | 2023.anamika.ahuja@ves.ac.in |
+| 2 | ADITYA SHARMA | 27 | AURO | d2024.aditya.sharma@ves.ac.in |
+| 3 | SHRADDHA VAYACHAL | 30 | AURO | d2024.shraddha.vayachal@ves.ac.in |
+| 4 | SANA SHAIKH | 62 | AURO | d2024.sana.shaikh@ves.ac.in |
 
 ---
 
 ## Guide Details
 
-**Project Guide:**  
+**Project Guide: Mrs. Ramya T**  
 **Department:** Automation and Robotics  
 **Institute:** VESIT, Mumbai  
 
@@ -28,89 +28,94 @@
 
 ## Problem Statement
 
-Write a clear problem statement here.
-
-Example:
-
-> The aim of this project is to design and develop a system that solves the problem of __________ by using __________ technology.
-
+The aim of this project is to develop a browser-based WebXR robot teleoperation platform using a verified nine-node cooperative multi-agent architecture to enable intuitive robot programming by demonstration. The proposed system integrates perception, reasoning, contingency-aware motion planning, Damped Least Squares inverse kinematics, and a hash-chained audit framework to ensure safe, transparent, and audit-traceable robot operation across Web, Desktop, Virtual Reality (VR), and Mobile Augmented Reality (AR) platforms.
 ---
 
 ## Abstract
+# Abstract
 
-Write a short summary of the project in 150–250 words.
+Industrial robot programming traditionally relies on vendor-specific programming languages, teach pendants, and manual configuration, making it complex, time-consuming, and inaccessible to non-expert users. Furthermore, existing approaches provide limited transparency into robot decision-making, making verification and auditing difficult. This project, **COGNIFORGE: A Verified Multi-Agent Architecture for Contingency-Aware, Audit-Traceable Robot Teleoperation in WebXR**, addresses these challenges by developing a browser-based robot teleoperation platform that enables intuitive robot programming through natural hand demonstrations in an immersive WebXR environment.
+The proposed system employs a verified **nine-node cooperative multi-agent architecture** integrating perception, visual reasoning, intent prediction, reactive safety, Belief–Desire–Intention (BDI) planning, contingency-aware motion planning, Damped Least Squares inverse kinematics, error correction, and a hash-chained audit ledger to ensure safe, transparent, and verifiable robot operation. The platform is designed for deployment across Web, Desktop, Virtual Reality (VR), and Mobile Augmented Reality (AR) environments, providing a flexible and cross-platform solution for robot teleoperation.
+Although physical robot integration is planned for future work using ROS2 and MoveIt2, the current implementation has been validated through comprehensive software verification and cross-platform testing. The expected outcome is a secure, intelligent, and audit-traceable robot teleoperation framework that simplifies robot programming while enhancing safety, reliability, and transparency. The proposed system has applications in industrial automation, smart manufacturing, collaborative robotics, research laboratories, training and education, and remote robot operation.
 
-The abstract should include:
-
-- Background of the problem
-- Proposed solution
-- Technology used
-- Expected outcome
-- Application area
 
 ---
 
 ## Objectives
 
-1. To study the existing problem and available solutions.
-2. To design a suitable hardware/software/system architecture.
-3. To implement the proposed solution.
-4. To test and validate the system.
-5. To document and publish the project work.
-
+1. To study the limitations of existing industrial robot programming methods and analyze current WebXR and robot teleoperation technologies.
+2. To design a browser-based WebXR robot teleoperation system using a verified nine-node cooperative multi-agent architecture.
+3. To implement intelligent perception, planning, inverse kinematics, contingency-aware motion planning, and audit-traceable decision logging for safe robot programming.
+4. To integrate and validate the proposed framework with a physical robotic manipulator using ROS2 and MoveIt2, enabling real-world robot teleoperation.
+5. To verify and evaluate the system through software testing, cross-platform deployment, performance analysis, and comprehensive documentation, with the objective of publishing the research findings.
+6. To document the system architecture, implementation, verification, and experimental results, and prepare the work for research publication,
 ---
 
 ## Scope of the Project
 
-Mention what the project will cover.
-
-Example:
-
-- Design and development of prototype
-- Hardware implementation
-- Software/mobile/web interface
-- Data collection and testing
-- Performance analysis
+Design and development of a browser-based WebXR robot teleoperation platform.
+Implementation of a verified nine-node cooperative multi-agent architecture for perception, planning, safety, and robot control.
+Development of cross-platform applications for Web, Desktop, Virtual Reality (VR), and Mobile Augmented Reality (AR).
+Integration of Programming by Demonstration (PbD), Damped Least Squares inverse kinematics, contingency-aware motion planning, collision checking, and audit-traceable logging.
+Software verification, cross-platform testing, performance evaluation, and system validation.
+Integration and testing with a physical industrial robot using ROS2 and MoveIt2 for real-world deployment.
 
 ---
 
 ## Existing System
 
-Describe the currently available system or method.
+Existing industrial robot programming primarily relies on vendor-specific programming languages, teach pendants, and kinesthetic teaching methods. Robot teleoperation systems also use conventional interfaces such as joysticks, graphical user interfaces, or standalone VR applications. While these approaches enable robot control, they often require specialized training and provide limited flexibility for intuitive human–robot interaction.
 
-Mention its limitations:
-
-- High cost
-- Low accuracy
-- Manual process
-- Lack of automation
-- Poor scalability
-- Limited accessibility
-
+Limitations of Existing Systems
+Requires specialized programming expertise and vendor-specific knowledge.
+Time-consuming and manual robot programming process using teach pendants or coding.
+Limited accessibility for non-expert users due to complex interfaces.
+Lack of transparency and auditability, making robot decisions difficult to verify.
+Limited adaptability to dynamic environments and changing task conditions.
+Limited cross-platform support, with many solutions restricted to specific hardware or software ecosystems.
+Insufficient integration of intelligent decision-making, safety verification, and contingency-aware planning.
 ---
 
 ## Proposed System
 
-Describe your proposed solution.
+Main Idea
 
-Include:
+Develop a browser-based WebXR robot teleoperation platform that enables intuitive robot programming through natural hand demonstrations using a verified nine-node cooperative multi-agent architecture.
 
-- Main idea
-- How it works
-- Major components
-- Expected benefits
+How It Works
+Captures the operator's hand movements using WebXR.
+Processes user inputs through intelligent agents for perception, reasoning, planning, and safety.
+Generates safe robot trajectories using contingency-aware motion planning and Damped Least Squares inverse kinematics.
+Records every decision in a hash-chained audit ledger to ensure transparent and verifiable robot operation.
+Supports future execution on a physical robot through ROS2 and MoveIt2 integration.
 
+Major Components
+WebXR-based User Interface
+Nine-Node Cooperative Multi-Agent Architecture
+Perception and Visual Reasoning Modules
+BDI Planning and Motion Planning
+Inverse Kinematics and Collision Checking
+Hash-Chained Audit Logging
+Cross-Platform Deployment (Web, Desktop, VR, Mobile AR)
+ROS2 & MoveIt2 Integration (Future Scope)
+
+Expected Benefits
+Simplifies industrial robot programming through natural interaction.
+Improves safety using intelligent planning and collision avoidance.
+Provides transparent and audit-traceable robot decision-making.
+Enables cross-platform accessibility across Web, Desktop, VR, and AR.
+Establishes a scalable framework for future deployment on physical industrial robots.
 ---
 
 ## System Architecture
+<p align="center">
+  <img src="images/system_arch.png"
+       alt="CogniForge System Architecture"
+       width="1000">
+</p>
 
-Add block diagram or system architecture image here.
 
-```markdown
-![System Architecture](images/system_architecture.png)
-````
-
-Briefly explain the architecture.
+The proposed system follows a **browser-based WebXR architecture** built around a **verified nine-node cooperative multi-agent framework**. The operator interacts with the system through a WebXR interface, where natural hand movements are captured and interpreted as robot commands. These inputs are processed sequentially by the **Gateway Agent**, **Perception Agent**, **Visual Reasoning Agent**, and **Intent Prediction Agent** to understand the user's actions. The **Reactive Safety Agent** continuously checks for unsafe conditions, while the **Belief–Desire–Intention (BDI) Planning Agent** and **Motion Planning Agent** generate safe and efficient robot trajectories. The **Error Correction Agent** resolves execution issues, and the **Meta-Agent** monitors the overall system to coordinate communication between agents. All decisions and actions are securely recorded in a **hash-chained audit ledger**, ensuring transparency and traceability. The generated motion commands are validated using **Damped Least Squares inverse kinematics** and are designed for future execution on a physical robot through **ROS2 and MoveIt2**. The architecture supports deployment across **Web, Desktop, Virtual Reality (VR), and Mobile Augmented Reality (AR)** platforms, providing a scalable and cross-platform robot teleoperation solution. 
 
 ---
 
