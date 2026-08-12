@@ -445,9 +445,9 @@ Add images or videos of the working prototype.
 Video Link:
 
 ```markdown
-[Project Demo Video](https://drive.google.com/your-video-link)
-```
 
+```
+https://youtu.be/yBu4Pf4i_TM
 ---
 
 ## Applications
