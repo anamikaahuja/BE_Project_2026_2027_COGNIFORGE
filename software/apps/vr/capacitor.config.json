@@ -1,0 +1,11 @@
+{
+  "appId": "com.cogniforge.vr",
+  "appName": "COGNIFORGE VR",
+  "webDir": "../../frontend/dist-vr",
+  "server": {
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "cogniforge-vr",
+  "version": "0.1.0",
+  "private": true,
+  "description": "COGNIFORGE VR -- Capacitor Android app built from the VR-tailored frontend build, sideloadable directly onto a standalone Meta Quest headset.",
+  "main": "capacitor.config.json",
+  "scripts": {
+    "build:frontend": "cd ../../frontend && npm run build:vr",
+    "sync": "npm run build:frontend && npx cap sync android",
+    "add:android": "npx cap add android",
+    "open:android": "npx cap open android"
+  },
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/core": "^8.5.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.0",
+    "typescript": "^7.0.2"
+  }
+}
