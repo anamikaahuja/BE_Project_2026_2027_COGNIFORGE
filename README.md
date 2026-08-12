@@ -174,42 +174,84 @@ Develop a browser-based WebXR robot teleoperation platform that enables intuitiv
 The proposed system follows a **browser-based WebXR architecture** built around a **verified nine-node cooperative multi-agent framework**. The operator interacts with the system through a WebXR interface, where natural hand movements are captured and interpreted as robot commands. These inputs are processed sequentially by the **Gateway Agent**, **Perception Agent**, **Visual Reasoning Agent**, and **Intent Prediction Agent** to understand the user's actions. The **Reactive Safety Agent** continuously checks for unsafe conditions, while the **Belief–Desire–Intention (BDI) Planning Agent** and **Motion Planning Agent** generate safe and efficient robot trajectories. The **Error Correction Agent** resolves execution issues, and the **Meta-Agent** monitors the overall system to coordinate communication between agents. All decisions and actions are securely recorded in a **hash-chained audit ledger**, ensuring transparency and traceability. The generated motion commands are validated using **Damped Least Squares inverse kinematics** and are designed for future execution on a physical robot through **ROS2 and MoveIt2**. The architecture supports deployment across **Web, Desktop, Virtual Reality (VR), and Mobile Augmented Reality (AR)** platforms, providing a scalable and cross-platform robot teleoperation solution. 
 
 ---
-
 ## Hardware Requirements
 
 | Sr. No. | Component | Specification | Quantity | Purpose |
-| ------- | --------- | ------------- | -------- | ------- |
-| 1       |           |               |          |         |
-| 2       |           |               |          |         |
-| 3       |           |               |          |         |
-| 4       |           |               |          |         |
+| :-----: | --------- | ------------- | :------: | ------- |
+| 1 | Laptop / Desktop | Intel Core i5/Ryzen 5 or higher, 16 GB RAM, SSD | 1 | Development and Testing |
+| 2 | Webcam / RGB Camera | HD (720p or higher) | 1 | Hand Tracking and User Input |
+| 3 |  Mobile Phone Camera | Android Smartphone with HD Camera and WebXR-Compatible Browser | 1 | Hand Gesture Capture and User Input |
+| 4 | VR Headset | Meta Quest 2 | 1 | Virtual Reality Testing |
+| 5 | Industrial Robot  | ROS 2 Compatible Robotic Manipulator | 1 | Physical Robot Integration |
 
 ---
 
 ## Software Requirements
 
 | Sr. No. | Software / Tool | Version | Purpose |
-| ------- | --------------- | ------- | ------- |
-| 1       |                 |         |         |
-| 2       |                 |         |         |
-| 3       |                 |         |         |
+| :-----: | --------------- | :-----: | ------- |
+| 1 | Visual Studio Code | Latest | Source Code Development |
+| 2 | Node.js | v20+ | Backend Runtime and Package Management |
+| 3 | Git & GitHub | Latest | Version Control and Collaboration |
+| 4 | ROS 2 | Humble / Jazzy | Robot Communication |
+| 5 | MoveIt 2  | Latest | Motion Planning |
+| 6 | Google Chrome / Microsoft Edge | Latest | WebXR Application Testing |
 
 ---
 
 ## Technologies Used
 
-Mention technologies used in the project.
+### Programming Languages
 
-Example:
+- **TypeScript** – Used to develop the frontend application with type safety and improved maintainability.
+- **JavaScript** – Used for implementing interactive web functionalities and client-side logic.
+- **Python** – Used for AI algorithms, backend processing, and robot control logic.
 
-* Embedded C / Python / JavaScript
-* Arduino / STM32 / ESP32 / Raspberry Pi
-* ROS / MATLAB / Simulink
-* Machine Learning / Computer Vision
-* IoT / Cloud / Mobile App
-* PCB Design / CAD Design
+### Web Technologies
 
----
+- **WebXR API** – Enables immersive Virtual Reality (VR) and Augmented Reality (AR) experiences within the browser.
+- **WebGL** – Renders interactive 3D graphics for robot visualization.
+- **HTML5** – Provides the structural framework of the web application.
+- **CSS3** – Used for responsive styling and user interface design.
+- **Three.js** – Simplifies the creation and rendering of 3D scenes in WebXR.
+- **React.js** – Builds a dynamic, component-based user interface.
+
+### Artificial Intelligence
+
+- **Multi-Agent Systems** – Coordinates multiple intelligent agents for distributed decision-making.
+- **Belief–Desire–Intention (BDI) Planning** – Models intelligent agent reasoning and task planning.
+- **Intent Prediction** – Interprets user actions to determine intended robot operations.
+- **Visual Reasoning** – Analyzes visual information to support intelligent robot decisions.
+
+### Robotics
+
+- **Programming by Demonstration (PbD)** – Enables robots to learn tasks through user demonstrations.
+- **Damped Least Squares (DLS) Inverse Kinematics** – Computes stable joint movements while avoiding singularities.
+- **Motion Planning** – Generates safe and collision-free robot trajectories.
+- **Collision Checking** – Detects and prevents potential collisions during robot motion.
+- **ROS 2** – Provides the communication framework for robot integration and control.
+- **MoveIt 2** – Performs robot motion planning, kinematics, and execution.
+
+### Development Tools
+
+- **Visual Studio Code** – Primary Integrated Development Environment (IDE) for coding and debugging.
+- **Git** – Tracks source code changes and enables version control.
+- **GitHub** – Hosts the project repository and supports team collaboration.
+- **npm** – Manages JavaScript packages and project dependencies.
+- **Vite** – Provides fast development and optimized frontend builds.
+
+### Deployment Platforms
+
+- **Web Browser** – Allows platform-independent access to the application.
+- **Desktop Application** – Supports execution on Windows, macOS, and Linux systems.
+- **Virtual Reality (VR)** – Enables immersive robot teleoperation using VR headsets.
+- **Mobile Augmented Reality (AR)** – Provides portable AR-based interaction through smartphones.
+
+### Security & Verification
+
+- **Hash-Chained Audit Logging** – Maintains tamper-evident records of all robot actions and decisions.
+- **Software Verification** – Validates the correctness and reliability of the implemented system.
+- **Cross-Platform Testing** – Ensures consistent performance across supported devices and operating systems.
 
 ## Methodology
 
@@ -230,11 +272,11 @@ Explain the step-by-step approach.
 
 | Week / Month | Task Planned          | Status                            |
 | ------------ | --------------------- | --------------------------------- |
-| Week 1       | Problem finalization  | Pending / In Progress / Completed |
-| Week 2       | Literature survey     |                                   |
-| Week 3       | Requirement analysis  |                                   |
-| Week 4       | System design         |                                   |
-| Week 5       | Prototype development |                                   |
+| Week 1       | Problem finalization  |             Completed 
+| Week 2       | Literature survey     |             Completed                      |
+| Week 3       | Requirement analysis  |             Completed                      |
+| Week 4       | System design         |             Completed                      |
+| Week 5       | Prototype development |              In progress                     |
 | Week 6       | Testing               |                                   |
 | Week 7       | Documentation         |                                   |
 | Week 8       | Paper writing         |                                   |
