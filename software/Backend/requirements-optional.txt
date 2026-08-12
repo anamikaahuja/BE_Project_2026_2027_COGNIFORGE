@@ -1,0 +1,14 @@
+# Optional dependencies. The application runs correctly without these --
+# app/robotics/simulation.py detects their absence and falls back to
+# analytic (non-PyBullet) collision/workspace checks automatically.
+
+# PyBullet: at the time of writing, `pip install pybullet` fails to build
+# from source on macOS with the macOS 26 SDK + recent Xcode Command Line
+# Tools clang, because pybullet's bundled third-party zlib shim
+# (`#define fdopen(fd, mode) NULL`) collides with the SDK's `_stdio.h`
+# `__DARWIN_ALIAS` declaration of fdopen. This is an upstream pybullet/macOS
+# SDK compatibility issue, not a bug in this codebase. Install manually on a
+# platform/toolchain where it builds (e.g. Linux, or an older Xcode CLT) to
+# enable real physics-engine collision validation instead of the analytic
+# fallback:
+pybullet

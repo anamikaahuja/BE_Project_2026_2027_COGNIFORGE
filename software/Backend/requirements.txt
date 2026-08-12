@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+websockets
+pydantic>=2.6
+langgraph
+langchain-openai
+langchain-anthropic
+numpy
+scipy
+python-multipart
+python-dotenv
+networkx
+chromadb
+pytest
+pytest-asyncio
+httpx
