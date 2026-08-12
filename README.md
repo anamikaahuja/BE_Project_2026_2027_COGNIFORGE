@@ -447,7 +447,7 @@ Video Link:
 ```markdown
 
 ```
-https://youtu.be/yBu4Pf4i_TM
+[https://youtu.be/yBu4Pf4i_TM](https://youtu.be/nwztSd6h4qg)
 ---
 
 ## Applications
