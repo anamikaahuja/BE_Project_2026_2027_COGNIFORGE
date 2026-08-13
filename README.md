@@ -23,6 +23,8 @@
 
 **Institute:** Vivekanand Education Society's Institute of Technology (VESIT), Mumbai
 
+** Approval Video:**
+https://youtu.be/3ZimL497r2U
 ---
 
 ## Problem Statement
@@ -447,7 +449,7 @@ Video Link:
 ```markdown
 
 ```
-[https://youtu.be/yBu4Pf4i_TM](https://youtu.be/nwztSd6h4qg)
+https://youtu.be/3ZimL497r2U
 ---
 
 ## Applications
