@@ -1,0 +1,27 @@
+{
+  "name": "cogniforge-ar",
+  "version": "0.1.0",
+  "private": true,
+  "description": "COGNIFORGE AR -- handheld augmented-reality use on a phone. Android launches straight into NativeArActivity: a native ARCore + hand-written OpenGL renderer with real camera passthrough and hit-test surface placement (Capacitor's WebView cannot run WebXR's immersive-ar session at all, which is why this bypasses it entirely). iOS has no ARCore equivalent, so it falls back to the Capacitor WebView running the AR-tailored frontend build's head-tracking parallax mode, since Safari does not implement WebXR either.",
+  "main": "capacitor.config.json",
+  "scripts": {
+    "build:frontend": "cd ../../frontend && npm run build:ar",
+    "sync": "npm run build:frontend && npx cap sync",
+    "add:android": "npx cap add android",
+    "add:ios": "npx cap add ios",
+    "open:android": "npx cap open android",
+    "open:ios": "npx cap open ios"
+  },
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/ios": "^8.5.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.0",
+    "typescript": "^7.0.2"
+  }
+}

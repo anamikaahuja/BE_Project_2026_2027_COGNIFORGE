@@ -1,0 +1,11 @@
+{
+  "appId": "com.cogniforge.ar",
+  "appName": "COGNIFORGE AR",
+  "webDir": "../../frontend/dist-ar",
+  "server": {
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}
