@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <android.opengl.GLSurfaceView
+        android:id="@+id/gl_surface_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- Center-screen aim reticle: PLACE ROBOT hit-tests whatever is under
+         this point, but nothing on screen previously showed the user where
+         that was. -->
+    <View
+        android:id="@+id/reticle"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_gravity="center"
+        android:background="@drawable/reticle" />
+
+    <TextView
+        android:id="@+id/title_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:layout_margin="20dp"
+        android:text="COGNIFORGE AR (Native)"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:shadowColor="#000000"
+        android:shadowRadius="4" />
+
+    <Button
+        android:id="@+id/settings_button"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_gravity="top|end"
+        android:layout_margin="16dp"
+        android:text="⚙"
+        android:textSize="16sp"
+        android:backgroundTint="#33FFFFFF" />
+
+    <LinearLayout
+        android:id="@+id/settings_panel"
+        android:layout_width="260dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="64dp"
+        android:layout_marginEnd="16dp"
+        android:orientation="vertical"
+        android:padding="10dp"
+        android:background="#CC000000"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Backend host (this machine's LAN IP):"
+            android:textColor="#AAAAAA"
+            android:textSize="11sp"
+            android:layout_marginBottom="6dp" />
+
+        <EditText
+            android:id="@+id/host_input"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="e.g. 192.168.1.104"
+            android:inputType="text"
+            android:singleLine="true"
+            android:background="#FFFFFFFF"
+            android:padding="8dp"
+            android:layout_marginBottom="6dp" />
+
+        <Button
+            android:id="@+id/save_host_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="SAVE" />
+    </LinearLayout>
+
+    <!-- Task Scenarios: the five task categories Table 3's benchmark numbers
+         were measured against (GET /tasks, same list app.robotics.tasks.py
+         defines), playable live on demand. Top-center is the only zone not
+         already claimed by the settings gear (top-end), status log
+         (bottom-start) or PLACE ROBOT (bottom-center). -->
+    <LinearLayout
+        android:id="@+id/task_panel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginTop="64dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="8dp"
+        android:background="#CC000000">
+
+        <Spinner
+            android:id="@+id/task_spinner"
+            android:layout_width="180dp"
+            android:layout_height="wrap_content"
+            android:background="#FFFFFFFF" />
+
+        <Button
+            android:id="@+id/run_task_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="RUN"
+            android:textStyle="bold"
+            android:backgroundTint="#00CC66"
+            android:textColor="#04240F" />
+    </LinearLayout>
+
+    <!-- Scrollable so early one-time diagnostics (e.g. the first-camera-frame
+         line) can still be reviewed by scrolling up, instead of being
+         permanently pushed out once enough later messages (like repeated
+         AR_PLACE_FAILED retries) accumulate. -->
+    <ScrollView
+        android:id="@+id/status_log_scroll"
+        android:layout_width="320dp"
+        android:layout_height="220dp"
+        android:layout_gravity="bottom|start"
+        android:layout_margin="20dp"
+        android:layout_marginBottom="90dp"
+        android:background="#CC000000">
+
+        <TextView
+            android:id="@+id/status_log"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="10dp"
+            android:fontFamily="monospace"
+            android:textColor="#CCCCCC"
+            android:textSize="11sp"
+            android:text="SYSTEM: starting..." />
+    </ScrollView>
+
+    <Button
+        android:id="@+id/place_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="24dp"
+        android:paddingLeft="32dp"
+        android:paddingRight="32dp"
+        android:paddingTop="16dp"
+        android:paddingBottom="16dp"
+        android:text="PLACE ROBOT"
+        android:textStyle="bold"
+        android:backgroundTint="#0088FF"
+        android:textColor="#FFFFFF" />
+
+</FrameLayout>

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Base application theme. -->
+    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+        <!-- Customize your theme here. -->
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+    </style>
+
+    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:background">@null</item>
+    </style>
+
+
+    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+        <item name="android:background">@drawable/splash</item>
+    </style>
+
+    <!-- NativeArActivity's theme: deliberately NOT the splash theme above
+         (that theme's android:background is the branded splash.png, which
+         is what was bleeding through before this theme existed).
+
+         Just as importantly: this must NOT set an opaque
+         android:windowBackground either. GLSurfaceView is backed by a real
+         SurfaceView, which composites through a separate hardware layer
+         that has to show through a "hole" punched in the window. An
+         opaque window-level background paints over that hole on many
+         devices, producing exactly the symptom this chased for several
+         rounds: onDrawFrame runs every frame with zero GL errors, yet
+         nothing it draws (not even a solid clear color) ever reaches the
+         screen. The root FrameLayout's own android:background in
+         activity_native_ar.xml already covers the splash-bleed-through
+         concern at the correct layer (the content view hierarchy, not the
+         window decor), so the theme itself should stay neutral here. -->
+    <style name="AppTheme.NativeAr" parent="Theme.AppCompat.NoActionBar">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:windowBackground">@null</item>
+        <item name="android:windowIsTranslucent">false</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+</resources>
