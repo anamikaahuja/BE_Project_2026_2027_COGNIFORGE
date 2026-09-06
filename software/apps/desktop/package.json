@@ -1,0 +1,40 @@
+{
+  "name": "cogniforge-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "COGNIFORGE desktop app -- an Electron shell around the same WebXR/Three.js frontend, installable on Windows/macOS/Linux and (via WebXR passthrough on a tethered/Link-connected headset) usable on VR hardware without a separate native VR codebase.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:frontend": "cd ../../frontend && npm run build",
+    "copy:frontend": "rm -rf frontend-dist && cp -R ../../frontend/dist frontend-dist",
+    "prestart": "npm run build:frontend",
+    "dist": "npm run build:frontend && npm run copy:frontend && electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^30.5.1",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.cogniforge.desktop",
+    "productName": "COGNIFORGE",
+    "icon": "assets/icon.png",
+    "files": [
+      "main.js",
+      "preload.js",
+      "frontend-dist/**/*"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "mac": {
+      "category": "public.app-category.education"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}
