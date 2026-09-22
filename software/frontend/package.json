@@ -1,0 +1,34 @@
+{
+  "name": "cogniforge-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "build:vr": "tsc && vite build --mode vr",
+    "build:ar": "tsc && vite build --mode ar",
+    "build:all": "npm run build && npm run build:vr && npm run build:ar",
+    "dev:vr": "vite --mode vr",
+    "dev:ar": "vite --mode ar",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "^0.10.35",
+    "@types/three": "^0.160.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "three": "^0.160.0",
+    "three-stdlib": "^2.36.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.2.1",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.2.2",
+    "vite": "^5.0.8",
+    "vitest": "^4.1.10"
+  }
+}
