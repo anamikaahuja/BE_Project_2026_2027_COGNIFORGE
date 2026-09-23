@@ -289,18 +289,16 @@ Explain the step-by-step approach.
 
 Students must update this section every week.
 
-| Week   | Date | Work Completed | Work Planned for Next Week | Issues / Challenges | GitHub Commit Link |
-| ------ | ---- | -------------- | -------------------------- | ------------------- | ------------------ |
-| Week 1 |      |                |                            |                     |                    |
-| Week 2 |      |                |                            |                     |                    |
-| Week 3 |      |                |                            |                     |                    |
-| Week 4 |      |                |                            |                     |                    |
-| Week 5 |      |                |                            |                     |                    |
-| Week 6 |      |                |                            |                     |                    |
-| Week 7 |      |                |                            |                     |                    |
-| Week 8 |      |                |                            |                     |                    |
+## Weekly Progress Updates
 
----
+| Week | Date | Work Completed | Work Planned for Next Week | Issues / Challenges | GitHub Commit Link |
+|---|---|---|---|---|---|
+| **Week 1** | **12–16 Aug 2026** | Established and organized the COGNIFORGE GitHub repository. Revised the README with the project description, problem statement, objectives, scope, proposed system and project timeline. Added previously developed application/software work and uploaded the VR build. | Continue organizing the backend and add the remaining backend components and supporting project files. | Initial organization of existing project work into the required GitHub structure and documentation. | [Commit 1](https://github.com/anamikaahuja/BE_Project_2026_2027_COGNIFORGE/commit/3e37b18e7d0827ec965a2a70fe9ca64403ba1e9f), [Commit 2](https://github.com/anamikaahuja/BE_Project_2026_2027_COGNIFORGE/commit/b74c985937d9143ce68347add18d504ecffe6d0f) |
+| **Week 2** | **17–23 Aug 2026** | Added additional backend components, including initialization and schema files. Organized documentation for the Multi-Agent, Digital Twin and Robotics components. | Continue development and documentation of the multi-agent and robotics components. | Maintaining a structured repository while integrating different backend and robotics-related components. | [Commit 1](https://github.com/anamikaahuja/BE_Project_2026_2027_COGNIFORGE/commit/3adb80b747c81eb1860be40340061cb417237df2), [Commit 2](https://github.com/anamikaahuja/BE_Project_2026_2027_COGNIFORGE/commit/5d5ed9e7f817db507a4501950a638edea262e118) |
+| **Week 3** | **24–30 Aug 2026** | Continued development of the multi-agent, digital-twin and robotics components and prepared the project for hardware integration. | Begin physical robot assembly and integrate the hardware with the project system. | Integrating the software architecture with the planned physical robotic system and coordinating multiple project components. | — |
+| **Week 4** | **31 Aug–6 Sep 2026** | Assembled the 3D-printed body of the custom 5-DOF robotic manipulator and joined the mechanical components for initial system integration. Added AR/VR research papers and organized AR-related application files. | Continue hardware integration and testing and integrate the AR/software components with the overall project. | Mechanical assembly and initial integration of the custom 5-DOF robotic manipulator with the overall system. | [Commit 1](https://github.com/anamikaahuja/BE_Project_2026_2027_COGNIFORGE/commit/9f0639808e0d0150a28f98e47db84993b2fd2cf2), [Commit 2](https://github.com/anamikaahuja/BE_Project_2026_2027_COGNIFORGE/commit/d66c7b3a3a34270a5ff4ca0ad9a1269ee4b33e4e) |
+| **Week 5** | **7–13 Sep 2026** | Continued work on the physical robotic manipulator, including assembly, component integration and initial attempts to connect the hardware with the project system. Continued development and organization of the AR/software components. | Continue hardware/software integration and prepare the frontend for integration with the backend and other project modules. | Hardware and software integration required coordination between the physical robot, application components and project architecture. | — |
+| **Week 6** | **14–20 Sep 2026** | Added the frontend application under the software section, including frontend files and components for robot scenes, WebSocket communication and AR/VR-related modules. Cleaned up unnecessary frontend files from the repository. | Continue integration of the frontend, backend, AI-agent and robotic components, followed by testing and debugging. | Managing a large number of application files and maintaining the required GitHub folder structure while integrating different modules. | [Frontend Commit](https://github.com/anamikaahuja/BE_Project_2026_2027_COGNIFORGE/commit/087af5f8cd42786c4981dc5da71b617e3b84ee2a) |
 
 ## Design Files
 
