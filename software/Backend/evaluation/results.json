@@ -1,0 +1,40 @@
+{
+  "pick_and_place": {
+    "description": "Move a single object from Position A to Position B",
+    "n_trials": 10,
+    "tcr_percent": 100.0,
+    "del_seconds": 0.0253,
+    "tfs": 0.983
+  },
+  "stacking": {
+    "description": "Stack three objects in sequence on a target platform",
+    "n_trials": 10,
+    "tcr_percent": 100.0,
+    "del_seconds": 0.0585,
+    "tfs": 0.982
+  },
+  "path_tracing": {
+    "description": "Trace a continuous curved path (welding/painting simulation)",
+    "n_trials": 10,
+    "tcr_percent": 100.0,
+    "del_seconds": 0.0623,
+    "tfs": 0.983
+  },
+  "assembly_2part": {
+    "description": "Insert a cylindrical peg into a matching hole",
+    "n_trials": 10,
+    "tcr_percent": 100.0,
+    "del_seconds": 0.0416,
+    "tfs": 0.981
+  },
+  "assembly_complex": {
+    "description": "Four-step pick, orient, insert, fasten sequence",
+    "n_trials": 10,
+    "tcr_percent": 100.0,
+    "del_seconds": 0.0115,
+    "tfs": 0.976
+  },
+  "_error_correction_accuracy_percent": 100.0,
+  "_user_effort_score": "N/A -- requires human-subject study (not run in this environment)",
+  "_methodology": "Synthetic demonstrations (ideal Cartesian waypoints + Gaussian noise, std=0.01m) resolved via the real DLS IK solver and pushed through the actual /session/* REST pipeline (real cubic-spline smoothing, real collision validation). Not a human-subject study."
+}
