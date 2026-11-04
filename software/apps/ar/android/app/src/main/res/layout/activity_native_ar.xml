@@ -85,6 +85,7 @@
          defines), playable live on demand. Top-center is the only zone not
          already claimed by the settings gear (top-end), status log
          (bottom-start) or PLACE ROBOT (bottom-center). -->
+    <!-- Task Scenarios (UR5 specific - hidden for 5-DOF mode) -->
     <LinearLayout
         android:id="@+id/task_panel"
         android:layout_width="wrap_content"
@@ -94,7 +95,8 @@
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:padding="8dp"
-        android:background="#CC000000">
+        android:background="#CC000000"
+        android:visibility="gone">
 
         <Spinner
             android:id="@+id/task_spinner"
@@ -111,6 +113,33 @@
             android:textStyle="bold"
             android:backgroundTint="#00CC66"
             android:textColor="#04240F" />
+    </LinearLayout>
+
+    <!-- 5-DOF Joint Controls -->
+    <LinearLayout
+        android:id="@+id/jog_panel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_marginBottom="80dp"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="#CC000000">
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#FFF" android:text="Base (0-180°)" />
+        <SeekBar android:id="@+id/jog_j1" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="180" android:progress="90" />
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#FFF" android:text="Shoulder (0-180°)" />
+        <SeekBar android:id="@+id/jog_j2" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="180" android:progress="90" />
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#FFF" android:text="Elbow (0-180°)" />
+        <SeekBar android:id="@+id/jog_j3" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="180" android:progress="90" />
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#FFF" android:text="Wrist (0-180°)" />
+        <SeekBar android:id="@+id/jog_j4" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="180" android:progress="90" />
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#FFF" android:text="Gripper (0-60°)" />
+        <SeekBar android:id="@+id/jog_j5" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="60" android:progress="0" />
     </LinearLayout>
 
     <!-- Scrollable so early one-time diagnostics (e.g. the first-camera-frame

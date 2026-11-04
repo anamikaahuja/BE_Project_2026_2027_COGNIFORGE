@@ -96,4 +96,43 @@ object PrimitiveGeometry {
         val data = verts.toFloatArray()
         return ObjLoader.MeshData(data, data.size / 9)
     }
+
+    /** Unit box: 1x1x1 cube centered at the local origin. */
+    fun unitBox(color: FloatArray): ObjLoader.MeshData {
+        val verts = ArrayList<Float>()
+
+        fun addTri(p0: FloatArray, p1: FloatArray, p2: FloatArray, n: FloatArray) {
+            for (p in listOf(p0, p1, p2)) {
+                verts.add(p[0]); verts.add(p[1]); verts.add(p[2])
+                verts.add(n[0]); verts.add(n[1]); verts.add(n[2])
+                verts.add(color[0]); verts.add(color[1]); verts.add(color[2])
+            }
+        }
+
+        fun addQuad(p0: FloatArray, p1: FloatArray, p2: FloatArray, p3: FloatArray, n: FloatArray) {
+            addTri(p0, p1, p2, n)
+            addTri(p0, p2, p3, n)
+        }
+
+        val v = arrayOf(
+            floatArrayOf(-0.5f, -0.5f,  0.5f), // 0: bottom-left-front
+            floatArrayOf( 0.5f, -0.5f,  0.5f), // 1: bottom-right-front
+            floatArrayOf( 0.5f,  0.5f,  0.5f), // 2: top-right-front
+            floatArrayOf(-0.5f,  0.5f,  0.5f), // 3: top-left-front
+            floatArrayOf(-0.5f, -0.5f, -0.5f), // 4: bottom-left-back
+            floatArrayOf( 0.5f, -0.5f, -0.5f), // 5: bottom-right-back
+            floatArrayOf( 0.5f,  0.5f, -0.5f), // 6: top-right-back
+            floatArrayOf(-0.5f,  0.5f, -0.5f)  // 7: top-left-back
+        )
+
+        addQuad(v[1], v[0], v[3], v[2], floatArrayOf( 0f,  0f,  1f)) // Front
+        addQuad(v[5], v[1], v[2], v[6], floatArrayOf( 1f,  0f,  0f)) // Right
+        addQuad(v[4], v[5], v[6], v[7], floatArrayOf( 0f,  0f, -1f)) // Back
+        addQuad(v[0], v[4], v[7], v[3], floatArrayOf(-1f,  0f,  0f)) // Left
+        addQuad(v[3], v[2], v[6], v[7], floatArrayOf( 0f,  1f,  0f)) // Top
+        addQuad(v[0], v[1], v[5], v[4], floatArrayOf( 0f, -1f,  0f)) // Bottom
+
+        val data = verts.toFloatArray()
+        return ObjLoader.MeshData(data, data.size / 9)
+    }
 }

@@ -163,29 +163,89 @@ class VisualReasoningAgent(BaseAgent):
 class IntentPredictionAgent(BaseAgent):
     """Generates multiple human-intent hypotheses (contingency-game style)
     from the current hand trajectory, so downstream planning can commit to a
-    safe common trunk while preparing branches per hypothesis."""
+    safe common trunk while preparing branches per hypothesis.
+
+    A second ("drop_hand") hypothesis is only offered when the recent
+    trajectory shows real downward motion consistent with that gesture --
+    this used to be emitted unconditionally on every single frame with any
+    hand present, which meant MotionPlanningAgent (below) generated a
+    contingency and requested HITL review continuously: the 2-second
+    cooldown in main.py's WebSocket handler could suppress the reappearing
+    review banner for a couple of seconds after each approval, but with the
+    operator's hand still moving, the very next frame past that window
+    always re-declared REQUIRE_HITL_REVIEW regardless of what was actually
+    happening -- there was never a real "resolved, no more contingencies"
+    state to reach. Tying the second hypothesis to genuine velocity signal
+    (available via the Gateway's 10-frame rolling window) restores the
+    system's actual claim: review is requested when a trajectory is
+    genuinely ambiguous, not on a fixed schedule regardless of intent.
+
+    The first cut of this fix used a 1.5cm-per-frame threshold, which
+    sounds small but isn't: at the ~20Hz the frontend streams at, ordinary
+    continuous mouse-driven control crosses 1.5cm between samples on almost
+    any deliberate movement, so the dialog kept reappearing during normal
+    use even though the artifactual "every single frame" trigger was gone.
+    The threshold below is a meaningful fraction of the drop_hand
+    hypothesis's own 0.2m target offset -- large enough that routine
+    steering doesn't cross it -- and the motion must also be predominantly
+    vertical (not incidental to a fast horizontal movement), so a quick
+    sideways reach doesn't get misread as a drop just because real mouse
+    paths are rarely perfectly axis-aligned.
+
+    "Downward" is measured on Z, not Y: CollisionValidator's floor check
+    (FLOOR_Z_CLEARANCE, backend/app/robotics/simulation.py) and the arm's
+    own empirically-measured kinematics both treat Z as height, so this
+    (and drop_hand's target offset below) follow that convention rather
+    than Three.js's Y-up scene convention the frontend renders with --
+    those aren't the same axis in this backend's coordinate frame, and
+    using Y here previously meant "drop toward the floor" didn't actually
+    move the target any closer to the floor CollisionValidator checks."""
+
+    DROP_VELOCITY_THRESHOLD = 0.06  # meters/frame of downward motion to count as a deliberate drop gesture
 
     def __init__(self):
         super().__init__("IntentPredictor", "Generate multiple human intent hypotheses.")
 
     def perceive(self, state: AgentState):
         frames = state.get("frames", [])
-        return frames[-1] if frames else None
+        return frames[-2:]
 
-    def act(self, last_frame: Optional[FrameData], state: AgentState) -> dict:
+    def act(self, recent_frames: List[FrameData], state: AgentState) -> dict:
+        last_frame = recent_frames[-1] if recent_frames else None
         hand = last_frame.left_hand or last_frame.right_hand if last_frame else None
         if not hand or not hand.joints:
-            return {"human_intents": [{"intent": "idle", "probability": 1.0, "target_pos": {"x": 0, "y": 1.0, "z": -0.5}}]}
+            # Matches MotionPlanner.HOME_POSE's own forward-kinematics
+            # reach (~(-0.66, -0.11, 0.22)) rather than an arbitrary point,
+            # so an idle frame doesn't ask the arm to lurch somewhere it
+            # was never actually reaching before.
+            return {"human_intents": [{"intent": "idle", "probability": 1.0, "target_pos": {"x": -0.5, "y": -0.1, "z": 0.25}}]}
 
         index_tip = next((j for j in hand.joints if j.name == "index-finger-tip"), hand.joints[0])
         pos = index_tip.position.model_dump()
-
         h1_pos = {"x": pos["x"] + 0.1, "y": pos["y"], "z": pos["z"]}
-        h2_pos = {"x": pos["x"], "y": max(pos["y"] - 0.2, 0.05), "z": pos["z"]}
 
+        downward_velocity = 0.0
+        horizontal_velocity = 0.0
+        if len(recent_frames) == 2:
+            prev_hand = recent_frames[0].left_hand or recent_frames[0].right_hand
+            if prev_hand and prev_hand.joints:
+                prev_tip = next((j for j in prev_hand.joints if j.name == "index-finger-tip"), prev_hand.joints[0])
+                prev_pos = prev_tip.position
+                downward_velocity = prev_pos.z - pos["z"]
+                horizontal_velocity = ((prev_pos.x - pos["x"]) ** 2 + (prev_pos.y - pos["y"]) ** 2) ** 0.5
+
+        is_ambiguous_drop = (
+            downward_velocity > self.DROP_VELOCITY_THRESHOLD
+            and downward_velocity > horizontal_velocity
+        )
+        if not is_ambiguous_drop:
+            return {"human_intents": [{"intent": "reach_forward", "probability": 1.0, "target_pos": h1_pos}]}
+
+        drop_probability = min(0.3 + downward_velocity, 0.6)
+        h2_pos = {"x": pos["x"], "y": pos["y"], "z": max(pos["z"] - 0.2, 0.05)}
         return {"human_intents": [
-            {"intent": "reach_forward", "probability": 0.7, "target_pos": h1_pos},
-            {"intent": "drop_hand", "probability": 0.3, "target_pos": h2_pos},
+            {"intent": "reach_forward", "probability": 1.0 - drop_probability, "target_pos": h1_pos},
+            {"intent": "drop_hand", "probability": drop_probability, "target_pos": h2_pos},
         ]}
 
 
@@ -305,14 +365,28 @@ class ErrorCorrectionAgent(BaseAgent):
         return state.get("robot_trajectory", [])
 
     def act(self, traj: Any, state: AgentState) -> dict:
+        # A collision-free trajectory means there's nothing for THIS agent
+        # to flag -- it does not mean the upstream decision was EXECUTE.
+        # This used to unconditionally overwrite meta_decision to EXECUTE
+        # here, clobbering MotionPlanningAgent's REQUIRE_HITL_REVIEW
+        # whenever the trajectory happened to validate cleanly -- which,
+        # for an intent-ambiguity review (as opposed to a collision
+        # rejection), is the *normal* case: a genuinely ambiguous but
+        # perfectly safe trajectory validates fine, so ambiguity-based
+        # review could never actually reach the operator. Preserving an
+        # already-pending REQUIRE_HITL_REVIEW here is what makes that
+        # review possible to see at all.
+        upstream_decision = state.get("meta_decision")
+
         if not traj:
-            return {"meta_decision": "EXECUTE", "correction_report": {"classification": "none", "anomalies": []}}
+            return {"meta_decision": upstream_decision or "EXECUTE", "correction_report": {"classification": "none", "anomalies": []}}
 
         joints = traj[0].get("joints", [])
         ok, reason = self.validator.validate_waypoint(joints)
 
         if ok:
-            return {"meta_decision": "EXECUTE", "correction_report": {"classification": "none", "anomalies": []}}
+            decision = "REQUIRE_HITL_REVIEW" if upstream_decision == "REQUIRE_HITL_REVIEW" else "EXECUTE"
+            return {"meta_decision": decision, "correction_report": {"classification": "none", "anomalies": []}}
 
         refine_count = state.get("refine_count", 0) + 1
         MAX_REFINE_ATTEMPTS = 3
