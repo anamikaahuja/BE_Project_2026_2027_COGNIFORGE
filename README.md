@@ -124,7 +124,7 @@ Develop an industrial-grade, cross-platform WebXR teleoperation system enabling 
 
 ## System Architecture
 
-![System Architecture](images/system_architecture.png)
+![System Architecture](images/system_arch.png)
 
 The proposed system follows a browser-based WebXR architecture built around a verified nine-node cooperative multi-agent framework. The operator interacts with the system through a WebXR interface, where natural hand movements are captured and interpreted as robot commands. These inputs are processed sequentially by the Gateway Agent, Perception Agent, Visual Reasoning Agent, and Intent Prediction Agent to understand the user's actions. The Reactive Safety Agent continuously checks for unsafe conditions, while the Belief–Desire–Intention (BDI) Planning Agent and Motion Planning Agent generate safe and efficient robot trajectories. The Error Correction Agent resolves execution issues, and the Meta-Supervisor Agent coordinates communication between all sub-systems. All decisions and actions are securely recorded in a hash-chained audit ledger, ensuring transparency and traceability. The generated motion commands are validated using Damped Least Squares inverse kinematics and are designed for execution on a physical robot through direct serial control and ROS 2 / MoveIt 2.
 
@@ -236,13 +236,12 @@ The proposed system follows a browser-based WebXR architecture built around a ve
 ---
 
 ## Circuit Diagram
-![Circuit Diagram](images/circuit_diagram.png)
-*(Raspberry Pi Pico RP2040 UART/I2C connections to PCA9685 16-channel servo driver powered directly via the host laptop 5V USB bus).*
+> *Hardware interfacing schematic under review (Raspberry Pi Pico RP2040 UART/I2C connections to PCA9685 16-channel servo driver powered directly via host laptop 5V USB bus).*
 
 ---
 
 ## Flowchart / Algorithm
-![Flowchart](images/system_architecture.png)
+![Flowchart](images/flowchart.jpeg)
 
 ### Algorithm: Damped Least Squares Motion Execution with Audit Chain
 1. **Initialize:** Initialize FastAPI server, load DH parameters, connect WebXR client via WebSocket.
