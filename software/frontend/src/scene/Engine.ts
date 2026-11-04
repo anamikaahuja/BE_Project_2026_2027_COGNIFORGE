@@ -6,6 +6,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { FaceDetector, HandLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 import { GhostRobot } from './Robot';
 import { RealRobot } from './RealRobot';
+import { PhysicalArm5Dof } from './PhysicalArm5Dof';
 import { WIM } from './WIM';
 import { WebSocketClient, PlannedMessage } from '../socket/WebSocketClient';
 import { HandTracking } from '../xr/HandTracking';
@@ -25,6 +26,10 @@ export class Engine {
   private robot: GhostRobot | RealRobot;
   private phantomRobot: GhostRobot;
   private intentRobot: GhostRobot;
+  // Visual digital twin of the real physical 5-DOF hardware arm (separate
+  // hardware from the UR5 this.robot models) -- shown alongside it, not
+  // instead of it, and hidden by default until explicitly toggled on.
+  private physicalArm: PhysicalArm5Dof | null = null;
   private wim!: WIM;
   private grid: THREE.GridHelper | null = null;
   private highCognitiveLoad: boolean = false;
@@ -116,6 +121,10 @@ export class Engine {
             }
         });
         this.reviewRobot.getObject().visible = false;
+
+        this.physicalArm = new PhysicalArm5Dof();
+        this.physicalArm.getObject().position.set(0.35, 0, 0); // offset so it doesn't overlap the UR5
+        this.physicalArm.getObject().visible = false;
     } catch (e) {
         console.error("Robot init failed:", e);
         this.robot = null as any;
@@ -311,6 +320,9 @@ export class Engine {
     if (this.reviewRobot) {
         this.turntableGroup.add(this.reviewRobot.getObject());
     }
+    if (this.physicalArm) {
+        this.turntableGroup.add(this.physicalArm.getObject());
+    }
 
     // Position the turntable behind the camera's default view, but keep its
     // Y at 0: WebXR's 'local-floor' reference space (requested by VRButton)
@@ -387,8 +399,64 @@ export class Engine {
   private isManualMode: boolean = false;
   private manualJoints: number[] = [0,0,0,0,0,0];
 
+  // Tracks the server's last `requires_hitl` value so streamHandData() can
+  // pause telemetry while a review is pending -- without this, moving the
+  // mouse to actually click "APPROVE PRIMARY" (unavoidable: the button is
+  // rendered center-screen, away from wherever the mouse last was) is
+  // itself real cursor motion that the desktop mouse-fallback feeds back in
+  // as new "hand" telemetry, which can legitimately re-trigger contingency
+  // detection before the click even lands -- so the dialog reappeared no
+  // matter which button was clicked, not because approval didn't work but
+  // because approving it required movement that looked like a new gesture.
+  private pendingHitl: boolean = false;
+
+  // --- Operator Training Mode ---
+  // A trainee attempting one of the five scenarios themselves (as opposed
+  // to Arm Control mode's live shared control, or the autoplay Task
+  // Scenarios feature, which drives the arm autonomously). The backend
+  // scores each attempt using the exact same TFS/fidelity formula the
+  // offline benchmark harness reports in the paper's Table 3, so a live
+  // human attempt and an automated trial are measured identically -- see
+  // main.py's training_target handling.
+  private trainingModeActive: boolean = false;
+  private trainingTarget: { x: number; y: number; z: number } | null = null;
+  private trainingMarker: THREE.Mesh | null = null;
+  public onTrainingResult?: (result: { distance: number; tfs: number; reached: boolean } | null) => void;
+
+  public setTrainingMode(active: boolean) {
+      this.trainingModeActive = active;
+      if (!active) this.setTrainingTarget(null);
+  }
+
+  /** Shows (or hides, if null) a marker in the scene at the current
+   * waypoint the trainee is attempting to reach, and includes it in the
+   * outgoing telemetry so the backend can score proximity to it. */
+  public setTrainingTarget(pos: { x: number; y: number; z: number } | null) {
+      this.trainingTarget = pos;
+      if (!this.trainingMarker) {
+          const geometry = new THREE.SphereGeometry(0.03, 16, 12);
+          const material = new THREE.MeshBasicMaterial({ color: 0xffcc00, transparent: true, opacity: 0.7 });
+          this.trainingMarker = new THREE.Mesh(geometry, material);
+          this.trainingMarker.visible = false;
+          this.turntableGroup.add(this.trainingMarker);
+      }
+      if (pos) {
+          this.trainingMarker.position.set(pos.x, pos.y, pos.z);
+          this.trainingMarker.visible = true;
+      } else {
+          this.trainingMarker.visible = false;
+      }
+  }
+
   public setManualMode(enable: boolean) {
     this.isManualMode = enable;
+    // Taking manual control -- whether via the AI/Manual toggle or via
+    // "DIRECT OVERRIDE" -- resolves any pending review either way, and
+    // must clear this or a later switch back to AI Shadowing would find
+    // streamHandData() still paused on a stale flag with no new server
+    // message ever arriving to update it (nothing was being sent to
+    // produce one).
+    if (enable) this.pendingHitl = false;
     console.log(`Control Mode: ${enable ? 'MANUAL' : 'AI'}`);
   }
 
@@ -412,6 +480,26 @@ export class Engine {
           (this.workspaceBoundary.material as THREE.MeshBasicMaterial).color.setHex(isWarning ? 0xff0000 : 0x00ff00);
           (this.workspaceBoundary.material as THREE.MeshBasicMaterial).opacity = isWarning ? 0.4 : 0.1;
       }
+  }
+
+  /** Shows/hides the physical 5-DOF arm's visual twin (PhysicalArm5Dof).
+   * Off by default -- this is a genuinely different piece of hardware from
+   * the UR5 the rest of the scene models, so it's opt-in rather than
+   * always rendered alongside it. */
+  public setPhysicalArmVisible(visible: boolean) {
+      if (this.physicalArm) {
+          this.physicalArm.getObject().visible = visible;
+      }
+  }
+
+  /** Direct per-motor jog control: updates the visual twin to exactly the
+   * raw servo degrees the Joint Jog panel is about to (or just did) send
+   * to the Pico over REST (see main.py's POST /pico/jog) -- called
+   * straight from the UI on every slider change, independent of the
+   * WebSocket/hand-tracking stream entirely, since there's no more IK
+   * target this arm is being driven toward. */
+  public setPhysicalArmJoints(jointsDeg: number[]) {
+      this.physicalArm?.updateJoints(jointsDeg);
   }
 
   /** Keeps the in-headset 3D panel's visible buttons in sync with the
@@ -443,6 +531,7 @@ export class Engine {
   private initSocket() {
     this.wsClient.onMessage((data: PlannedMessage) => {
         if (data.status === 'planned' && !this.isManualMode) {
+            this.pendingHitl = !!data.requires_hitl;
 
             if (data.high_cognitive_load !== undefined) {
                 this.highCognitiveLoad = data.high_cognitive_load;
@@ -491,6 +580,10 @@ export class Engine {
                 if (this.onJointUpdate && this.robot) {
                     this.onJointUpdate(data.robot_joints, this.robot.getSimulatedStress(), data.requires_hitl);
                 }
+            }
+
+            if (this.trainingModeActive && this.onTrainingResult) {
+                this.onTrainingResult(data.training_result ?? null);
             }
             if (data.rejected_joints) {
                 this.phantomRobot.updateJoints(data.rejected_joints);
@@ -698,6 +791,10 @@ export class Engine {
   public approveHITL() {
       this.wsClient.approveHitl();
       this.contingencies.forEach(g => g.getObject().visible = false);
+      // Clear locally rather than waiting for the next server round-trip
+      // (which needs a new frame sent to produce a response, and that
+      // frame was just about to be held back by this very flag).
+      this.pendingHitl = false;
   }
 
   /** Places the robot workspace at wherever the AR hit-test reticle
@@ -802,6 +899,13 @@ export class Engine {
     // Don't send telemetry if we are in manual mode (optional choice)
     if (this.isManualMode) return;
 
+    // Don't send telemetry while a HITL review is pending -- otherwise the
+    // mouse movement needed just to click "APPROVE PRIMARY" (unavoidable:
+    // the dialog is centered on screen, away from wherever the mouse last
+    // was) is itself read back in as new hand-tracking motion and can
+    // re-trigger contingency detection before the click even registers.
+    if (this.pendingHitl) return;
+
     const now = Date.now();
     if (now - this.lastStreamTime < 50) return;
     this.lastStreamTime = now;
@@ -817,6 +921,13 @@ export class Engine {
 
     this.wsClient.send({
       ...frame,
+      // Training Mode: sending training_mode=true tells the backend to
+      // suppress physical-arm commands regardless of whether a Pico is
+      // configured (see main.py's WS handler) -- a trainee attempting a
+      // scenario for the first time is expected to make mistakes, and a
+      // real motor must never move unpredictably while that's happening.
+      training_mode: this.trainingModeActive,
+      training_target: this.trainingTarget,
       robotFeedback: {
           currentJoints: this.currentJoints,
           stress: this.robot ? this.robot.getSimulatedStress() : []

@@ -26,6 +26,16 @@ export const App = ({ mode = 'desktop' as PlatformMode }: { mode?: PlatformMode 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const engineRef = useRef<Engine | null>(null);
   const sessionClientRef = useRef(new SessionClient());
+
+  // App-level mode select, shown on launch: "Arm Control" is the existing
+  // live shared-control / digital-twin experience (renamed conceptually,
+  // not restructured); "Training" is a distinct operator-trainer flow
+  // where a trainee attempts a scenario themselves and is scored, rather
+  // than watching the arm execute one autonomously. Chosen once at
+  // startup but switchable via the header button below.
+  type AppMode = 'select' | 'arm_control' | 'training';
+  const [appMode, setAppMode] = useState<AppMode>('select');
+
   const [isManual, setIsManual] = useState(false);
   const [joints, setJoints] = useState([0, 0, 0, 0, 0, 0]);
   const [stress, setStress] = useState([0, 0, 0, 0, 0, 0]);
@@ -161,6 +171,107 @@ export const App = ({ mode = 'desktop' as PlatformMode }: { mode?: PlatformMode 
       }
   };
 
+  // Physical arm bridge: an operator-facing toggle for the real 5-DOF
+  // hardware arm (hardware/pico_arm/ + backend/app/robotics/pico_bridge.py).
+  // Two independent things, deliberately not coupled: showing the visual
+  // preview (physicalArmVisible, a pure frontend rendering choice) and
+  // actually driving real servos (which needs the Pico's IP and only takes
+  // effect after /pico/configure). You can preview the arm with no
+  // hardware attached at all, or drive real hardware with the preview
+  // hidden -- neither implies the other.
+  //
+  // Driven by direct per-motor jog control, not hand-tracking/IK: without
+  // this arm's real link lengths and servo mounting measured, an
+  // IK-computed target lands at the wrong point in space regardless of how
+  // correct the IK math is. Jogging each servo's raw angle by hand and
+  // watching the real arm respond sidesteps needing that calibration at
+  // all -- see pico_bridge.py's module docstring.
+  const [showPhysicalArmSettings, setShowPhysicalArmSettings] = useState(false);
+  const [physicalArmVisible, setPhysicalArmVisible] = useState(false);
+  const [picoHostInput, setPicoHostInput] = useState('');
+  const [picoPortInput, setPicoPortInput] = useState('8888');
+  const [picoStatus, setPicoStatus] = useState<{ enabled: boolean; host: string | null; port: number } | null>(null);
+
+  // [base, shoulder, elbow, wrist, gripper] -- raw servo degrees, matching
+  // main.py's SERVO_LIMITS_DEG defaults exactly (0-180 for the first four
+  // joints, 0-60 for the gripper where 0=open/60=closed). 90 is a servo's
+  // natural mechanical center for the arm joints; 0 leaves the gripper open.
+  const JOG_JOINTS: { label: string; min: number; max: number }[] = [
+      { label: 'BASE', min: 0, max: 180 },
+      { label: 'SHOULDER', min: 0, max: 180 },
+      { label: 'ELBOW', min: 0, max: 180 },
+      { label: 'WRIST', min: 0, max: 180 },
+      { label: 'GRIPPER', min: 0, max: 60 },
+  ];
+  const [jogJoints, setJogJoints] = useState<number[]>([90, 90, 90, 90, 0]);
+
+  const togglePhysicalArmVisible = () => {
+      const next = !physicalArmVisible;
+      setPhysicalArmVisible(next);
+      engineRef.current?.setPhysicalArmVisible(next);
+  };
+
+  // Fires on every slider drag event -- updates the visual twin
+  // immediately (regardless of whether a Pico is even connected) and, only
+  // when one is, forwards the full 5-joint array to it. Not force-sent:
+  // pico_bridge.py's own ~12Hz throttle is what keeps a fast drag from
+  // flooding the Pico's single-threaded loop, so a throttled request here
+  // simply not landing is expected, not an error.
+  const handleJogChange = async (index: number, value: number) => {
+      const next = [...jogJoints];
+      next[index] = value;
+      setJogJoints(next);
+      engineRef.current?.setPhysicalArmJoints(next);
+
+      if (!picoStatus?.enabled) return;
+      try {
+          await fetch(`${getBackendHttpBase()}/pico/jog`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ joints: next }),
+          });
+      } catch (e: any) {
+          addLog(`PICO ERROR: ${e.message || 'could not reach backend'}`);
+      }
+  };
+
+  const refreshPicoStatus = async () => {
+      try {
+          const res = await fetch(`${getBackendHttpBase()}/pico/status`);
+          if (res.ok) setPicoStatus(await res.json());
+      } catch {
+          // Backend not reachable -- leave the last known status showing
+          // rather than clearing it, same convention as the other panels.
+      }
+  };
+
+  const handleConfigurePico = async () => {
+      const host = picoHostInput.trim();
+      if (!host) return;
+      try {
+          const res = await fetch(`${getBackendHttpBase()}/pico/configure`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ host, port: parseInt(picoPortInput, 10) || 8888 }),
+          });
+          const data = await res.json();
+          setPicoStatus(data);
+          addLog(`PICO: Configured for ${host}:${data.port} -- use the Joint Jog sliders to move it`);
+      } catch (e: any) {
+          addLog(`PICO ERROR: ${e.message || 'could not reach backend'}`);
+      }
+  };
+
+  const handleDisablePico = async () => {
+      try {
+          const res = await fetch(`${getBackendHttpBase()}/pico/disable`, { method: 'POST' });
+          setPicoStatus(await res.json());
+          addLog('PICO: Disabled -- physical arm will no longer receive commands');
+      } catch (e: any) {
+          addLog(`PICO ERROR: ${e.message || 'could not reach backend'}`);
+      }
+  };
+
   const summarizeDecision = (payloadJson: string): string => {
       try {
           const parsed = JSON.parse(payloadJson);
@@ -189,6 +300,77 @@ export const App = ({ mode = 'desktop' as PlatformMode }: { mode?: PlatformMode 
   // Tracks the latest HITL flag for the onJointUpdate closure without being
   // an effect dependency -- see the mount effect below for why this matters.
   const requiresHitlRef = useRef(false);
+
+  // Operator Training Mode: a trainee attempts a scenario's waypoints
+  // themselves (live hand/mouse tracking) and is scored, rather than
+  // watching the autoplay feature execute it autonomously. Progress is
+  // tracked in a ref (mutated inside engine.onTrainingResult, a callback
+  // set up once in the mount effect below -- same reasoning as
+  // requiresHitlRef just above: a callback captured at mount time can't
+  // safely close over state that changes afterward) and mirrored into
+  // React state purely for rendering.
+  type TrainingWaypointResult = { distance: number; tfs: number; timeMs: number };
+  type TrainingProgress = {
+      active: boolean;
+      task: TaskDef | null;
+      waypointIndex: number;
+      waypointStartTime: number;
+      results: TrainingWaypointResult[];
+  };
+  const trainingProgressRef = useRef<TrainingProgress>({ active: false, task: null, waypointIndex: 0, waypointStartTime: 0, results: [] });
+  const [trainingTask, setTrainingTask] = useState<TaskDef | null>(null);
+  const [trainingActive, setTrainingActive] = useState(false);
+  const [trainingWaypointIndex, setTrainingWaypointIndex] = useState(0);
+  const [trainingLiveDistance, setTrainingLiveDistance] = useState<number | null>(null);
+  const [trainingFinalScore, setTrainingFinalScore] = useState<{
+      tcr: number; avgTfs: number; totalTimeMs: number; waypointsReached: number; totalWaypoints: number;
+  } | null>(null);
+
+  const finishTrainingAttempt = () => {
+      const progress = trainingProgressRef.current;
+      const total = progress.task?.waypoints.length ?? 0;
+      const reached = progress.results.length;
+      setTrainingFinalScore({
+          tcr: total > 0 ? (reached / total) * 100 : 0,
+          avgTfs: reached > 0 ? progress.results.reduce((s, r) => s + r.tfs, 0) / reached : 0,
+          totalTimeMs: progress.results.reduce((s, r) => s + r.timeMs, 0),
+          waypointsReached: reached,
+          totalWaypoints: total,
+      });
+      progress.active = false;
+      setTrainingActive(false);
+      engineRef.current?.setTrainingTarget(null);
+      addLog(`TRAINING: Attempt complete -- ${reached}/${total} waypoints reached`);
+  };
+
+  const startTrainingAttempt = (task: TaskDef) => {
+      if (!engineRef.current || trainingProgressRef.current.active) return;
+      trainingProgressRef.current = { active: true, task, waypointIndex: 0, waypointStartTime: Date.now(), results: [] };
+      setTrainingTask(task);
+      setTrainingActive(true);
+      setTrainingWaypointIndex(0);
+      setTrainingLiveDistance(null);
+      setTrainingFinalScore(null);
+      engineRef.current.setTrainingTarget(task.waypoints[0]);
+      addLog(`TRAINING: Attempt started -- ${task.label} (${task.waypoints.length} waypoints)`);
+  };
+
+  // Returning to the mode-select screen mid-attempt would otherwise leave
+  // the training target marker floating in the scene and the ref marked
+  // "active" forever (nothing else clears it once appMode moves away from
+  // 'training').
+  const exitToModeSelect = () => {
+      if (trainingProgressRef.current.active) {
+          trainingProgressRef.current = { active: false, task: null, waypointIndex: 0, waypointStartTime: 0, results: [] };
+          setTrainingActive(false);
+          setTrainingTask(null);
+          setTrainingWaypointIndex(0);
+          setTrainingLiveDistance(null);
+          setTrainingFinalScore(null);
+          engineRef.current?.setTrainingTarget(null);
+      }
+      setAppMode('select');
+  };
 
   useEffect(() => {
     if (containerRef.current && !engineRef.current) {
@@ -219,6 +401,41 @@ export const App = ({ mode = 'desktop' as PlatformMode }: { mode?: PlatformMode 
             checkLimits(newJoints, engine);
         };
 
+        // Fires on every WS frame while Training Mode is active (see
+        // Engine.ts's onTrainingResult). Only records a waypoint once --
+        // `result.reached` stays true for as long as the operator holds
+        // the arm near the target, so without the ref-based progress
+        // check below, the same waypoint would advance repeatedly for
+        // every frame it stays reached on.
+        engine.onTrainingResult = (result) => {
+            const progress = trainingProgressRef.current;
+            if (!progress.active || !progress.task) return;
+
+            if (!result) {
+                setTrainingLiveDistance(null);
+                return;
+            }
+            setTrainingLiveDistance(result.distance);
+
+            if (result.reached) {
+                progress.results.push({
+                    distance: result.distance,
+                    tfs: result.tfs,
+                    timeMs: Date.now() - progress.waypointStartTime,
+                });
+                const nextIndex = progress.waypointIndex + 1;
+                if (nextIndex >= progress.task.waypoints.length) {
+                    finishTrainingAttempt();
+                } else {
+                    progress.waypointIndex = nextIndex;
+                    progress.waypointStartTime = Date.now();
+                    setTrainingWaypointIndex(nextIndex);
+                    setTrainingLiveDistance(null);
+                    engine.setTrainingTarget(progress.task.waypoints[nextIndex]);
+                }
+            }
+        };
+
         engine.animate();
         engineRef.current = engine;
         addLog("SYSTEM: Engine initialized. Awaiting telemetry.");
@@ -231,6 +448,17 @@ export const App = ({ mode = 'desktop' as PlatformMode }: { mode?: PlatformMode 
         }
     };
   }, []);
+
+  // Keeps Engine.trainingModeActive (and therefore the training_mode flag
+  // sent on every WS frame -- see streamHandData) in sync with the app-level
+  // mode select. This must cover the whole Training screen, not just an
+  // in-progress attempt: the Pico safety gate in main.py's WS handler keys
+  // off this same flag, so it needs to already be true the moment the
+  // operator's hand starts moving in Training mode, before they've even
+  // pressed START ATTEMPT.
+  useEffect(() => {
+      engineRef.current?.setTrainingMode(appMode === 'training');
+  }, [appMode]);
 
   const handleJointChange = (index: number, val: string) => {
     const newJoints = [...joints];
@@ -371,6 +599,10 @@ export const App = ({ mode = 'desktop' as PlatformMode }: { mode?: PlatformMode 
       if (!engineRef.current) return;
       engineRef.current.onArSessionChange = (active) => {
           setArSessionActive(active);
+          if (active) {
+              setPhysicalArmVisible(true);
+              engineRef.current?.setPhysicalArmVisible(true);
+          }
           if (!active) setArPlaced(false);
       };
       engineRef.current.onArLog = (msg) => addLog(msg);
@@ -396,6 +628,22 @@ export const App = ({ mode = 'desktop' as PlatformMode }: { mode?: PlatformMode 
             engineRef.current.setManualJoints(joints);
         }
     }
+  };
+
+  // The HITL "DIRECT OVERRIDE" button previously just called toggleMode(),
+  // which switches to manual control but never touches `requiresHitl` --
+  // so the review dialog stayed on screen indefinitely after choosing it,
+  // even though the operator had already made their choice (take manual
+  // control instead of reviewing the AI's contingencies). Manual mode does
+  // stop new server-pushed HITL flags from reapplying (Engine.ts gates the
+  // whole WS message handler on `!isManualMode`), so clearing the flag once
+  // here is enough -- a fresh decision will be made correctly if the
+  // operator later switches back to AI Shadowing.
+  const handleDirectOverride = () => {
+      requiresHitlRef.current = false;
+      setRequiresHitl(false);
+      addLog("HITL_OVERRIDDEN: Switched to manual control instead of reviewing contingencies.");
+      toggleMode();
   };
 
   // Auto-Highlighting Parser
@@ -434,9 +682,63 @@ export const App = ({ mode = 'desktop' as PlatformMode }: { mode?: PlatformMode 
 
       {/* UI Overlay */}
       <div style={{ position: 'relative', zIndex: 10, width: '100%', height: '100%', pointerEvents: 'none' }}>
+          {/* Mode Select: shown once on launch (backend is hosted separately,
+              so this has nothing to do with connecting to it -- it's purely
+              choosing between the two experiences below). Rendered on top of
+              everything else via a high z-index rather than gating the whole
+              return, so the Three.js engine and WebSocket connection already
+              initializing behind it aren't disturbed by the later mode
+              switch. */}
+          {appMode === 'select' && (
+              <div style={{
+                  position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+                  background: 'rgba(4,4,10,0.97)', zIndex: 30, pointerEvents: 'auto',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  color: 'white', fontFamily: 'Arial', textAlign: 'center',
+              }}>
+                  <h1 style={{ margin: 0, fontSize: '40px', letterSpacing: '4px' }}>COGNIFORGE</h1>
+                  <p style={{ margin: '10px 0 40px 0', opacity: 0.7 }}>{copy.subtitle}</p>
+                  <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', justifyContent: 'center', padding: '0 20px' }}>
+                      <button
+                          onClick={() => setAppMode('arm_control')}
+                          style={{
+                              width: '260px', padding: '28px 22px', background: '#0088ff', color: 'white',
+                              border: 'none', borderRadius: '12px', cursor: 'pointer', textAlign: 'left',
+                              boxShadow: '0 6px 24px rgba(0,0,0,0.5)',
+                          }}
+                      >
+                          <div style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '8px' }}>ROBOTIC ARM CONTROL</div>
+                          <div style={{ fontSize: '13px', opacity: 0.85 }}>
+                              Live digital twin of the real 5-DOF arm -- drive it by hand and demonstrate tasks.
+                          </div>
+                      </button>
+                      <button
+                          onClick={() => setAppMode('training')}
+                          style={{
+                              width: '260px', padding: '28px 22px', background: '#00cc66', color: '#04240f',
+                              border: 'none', borderRadius: '12px', cursor: 'pointer', textAlign: 'left',
+                              boxShadow: '0 6px 24px rgba(0,0,0,0.5)',
+                          }}
+                      >
+                          <div style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '8px' }}>OPERATOR TRAINING</div>
+                          <div style={{ fontSize: '13px', opacity: 0.85 }}>
+                              Attempt scenario waypoints yourself, hands-only, and get scored on completion and fidelity.
+                          </div>
+                      </button>
+                  </div>
+              </div>
+          )}
+
           {/* UI Header */}
           <div style={{ position: 'absolute', top: 20, left: 20, color: 'white', fontFamily: 'Arial', pointerEvents: 'auto' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {/* maxWidth + wrap keeps this row from silently growing into the
+                top-center Demonstration Session panel's space as more
+                toggle buttons get added -- title+gear+AGENTS already
+                nearly reached it, and adding ARM without this genuinely
+                did overlap it (buttons under the session panel became
+                unclickable, since it renders later in the DOM and sits on
+                top there). */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', maxWidth: '340px' }}>
                 <h1 style={{ margin: 0, fontSize: '24px', letterSpacing: '2px' }}>COGNIFORGE</h1>
                 <button
                     onClick={() => setShowSettings(s => !s)}
@@ -460,6 +762,31 @@ export const App = ({ mode = 'desktop' as PlatformMode }: { mode?: PlatformMode 
                 >
                     &#128279; AGENTS
                 </button>
+                <button
+                    onClick={() => { setShowPhysicalArmSettings(s => !s); refreshPicoStatus(); }}
+                    title="Physical 5-DOF arm: preview and hardware connection"
+                    style={{
+                        background: picoStatus?.enabled ? '#00cc66' : 'rgba(255,255,255,0.1)',
+                        border: '1px solid #666', color: 'white',
+                        borderRadius: '6px', padding: '0 10px', height: '28px', cursor: 'pointer',
+                        fontSize: '12px', fontWeight: 'bold', fontFamily: 'monospace',
+                    }}
+                >
+                    &#129302; ARM
+                </button>
+                {appMode !== 'select' && (
+                    <button
+                        onClick={exitToModeSelect}
+                        title="Return to mode select"
+                        style={{
+                            background: 'rgba(255,255,255,0.1)', border: '1px solid #666', color: 'white',
+                            borderRadius: '6px', padding: '0 10px', height: '28px', cursor: 'pointer',
+                            fontSize: '12px', fontWeight: 'bold', fontFamily: 'monospace',
+                        }}
+                    >
+                        SWITCH MODE
+                    </button>
+                )}
             </div>
             <p style={{ margin: '5px 0', opacity: 0.7 }}>{copy.subtitle}</p>
 
@@ -487,6 +814,80 @@ export const App = ({ mode = 'desktop' as PlatformMode }: { mode?: PlatformMode 
                     </button>
                 </div>
             )}
+
+            {showPhysicalArmSettings && (
+                <div style={{
+                    marginTop: '8px', padding: '10px', background: 'rgba(0,0,0,0.8)',
+                    border: '1px solid #666', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px',
+                    maxWidth: '280px'
+                }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px', color: '#ccc' }}>
+                        <input type="checkbox" checked={physicalArmVisible} onChange={togglePhysicalArmVisible} />
+                        Show 5-DOF arm preview in scene
+                    </label>
+                    <div style={{ borderTop: '1px solid #444', paddingTop: '8px' }}>
+                        <div style={{ marginBottom: '6px', color: '#aaa' }}>
+                            Pico W IP (printed over USB serial when it connects to WiFi -- see hardware/pico_arm/main.py):
+                        </div>
+                        <div style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}>
+                            <input
+                                type="text"
+                                value={picoHostInput}
+                                onChange={(e) => setPicoHostInput(e.target.value)}
+                                placeholder="e.g. 192.168.1.120"
+                                style={{ flex: 2, padding: '6px', boxSizing: 'border-box' }}
+                            />
+                            <input
+                                type="text"
+                                value={picoPortInput}
+                                onChange={(e) => setPicoPortInput(e.target.value)}
+                                style={{ flex: 1, padding: '6px', boxSizing: 'border-box' }}
+                            />
+                        </div>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                            <button onClick={handleConfigurePico} style={{ flex: 1, padding: '6px', background: '#00cc66', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>
+                                CONNECT
+                            </button>
+                            <button onClick={handleDisablePico} style={{ flex: 1, padding: '6px', background: '#663333', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>
+                                DISABLE
+                            </button>
+                        </div>
+                        <div style={{ marginTop: '8px', color: picoStatus?.enabled ? '#00ff88' : '#888' }}>
+                            {picoStatus?.enabled
+                                ? `Live: jog sliders below send directly to ${picoStatus.host}:${picoStatus.port}`
+                                : 'Not connected -- preview (if shown) still works, no hardware moves'}
+                        </div>
+                    </div>
+
+                    {/* Direct per-motor jog control -- the only way this arm
+                        moves now. No IK, no target position: each slider is
+                        exactly the raw servo degree sent to the Pico, so
+                        calibration is just watching the real arm and picking
+                        values by eye. */}
+                    <div style={{ borderTop: '1px solid #444', marginTop: '8px', paddingTop: '8px' }}>
+                        <div style={{ marginBottom: '6px', color: '#aaa' }}>
+                            Joint jog (raw servo degrees -- sent live if connected):
+                        </div>
+                        {JOG_JOINTS.map((joint, i) => (
+                            <div key={joint.label} style={{ marginBottom: '8px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                                    <span>{joint.label}</span>
+                                    <span>{jogJoints[i].toFixed(0)}°</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={joint.min}
+                                    max={joint.max}
+                                    step="1"
+                                    value={jogJoints[i]}
+                                    onChange={(e) => handleJogChange(i, parseFloat(e.target.value))}
+                                    style={{ width: '100%', cursor: 'pointer' }}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
           </div>
 
           {/* AR Place/Reach controls -- only relevant once a real
@@ -495,7 +896,7 @@ export const App = ({ mode = 'desktop' as PlatformMode }: { mode?: PlatformMode 
           {mode === 'ar' && arSessionActive && (
               <div style={{
                   position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-                  textAlign: 'center', pointerEvents: 'auto'
+                  textAlign: 'center', pointerEvents: 'auto', width: '90%', maxWidth: '400px'
               }}>
                   {!arPlaced ? (
                       <button onClick={handlePlaceRobot} style={{
@@ -507,10 +908,26 @@ export const App = ({ mode = 'desktop' as PlatformMode }: { mode?: PlatformMode 
                       </button>
                   ) : (
                       <div style={{
-                          padding: '10px 20px', background: 'rgba(0,0,0,0.7)', color: '#00ccff',
-                          border: '1px solid #00ccff', borderRadius: '8px', fontFamily: 'monospace', fontSize: '13px'
+                          padding: '15px', background: 'rgba(0,0,0,0.85)',
+                          border: '1px solid #00ccff', borderRadius: '8px', fontFamily: 'monospace', fontSize: '12px',
+                          display: 'flex', flexDirection: 'column', gap: '10px'
                       }}>
-                          Tap anywhere on the surface to move the arm there
+                          <div style={{ color: '#00ccff', marginBottom: '4px', fontWeight: 'bold' }}>5-DOF AR JOINT CONTROL</div>
+                          {JOG_JOINTS.map((joint, i) => (
+                              <div key={joint.label} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                  <span style={{ color: 'white', width: '70px', textAlign: 'left' }}>{joint.label}</span>
+                                  <input
+                                      type="range"
+                                      min={joint.min}
+                                      max={joint.max}
+                                      step="1"
+                                      value={jogJoints[i]}
+                                      onChange={(e) => handleJogChange(i, parseFloat(e.target.value))}
+                                      style={{ flex: 1, cursor: 'pointer' }}
+                                  />
+                                  <span style={{ color: 'white', width: '40px', textAlign: 'right' }}>{jogJoints[i].toFixed(0)}°</span>
+                              </div>
+                          ))}
                       </div>
                   )}
               </div>
@@ -602,7 +1019,7 @@ export const App = ({ mode = 'desktop' as PlatformMode }: { mode?: PlatformMode 
               injected VR/AR buttons bottom-center/bottom-right), so this
               sits in the one remaining gap: centered, just above those
               native buttons. */}
-          {tasks.length > 0 && (
+          {appMode === 'arm_control' && tasks.length > 0 && (
               <div style={{
                   position: 'absolute', bottom: 78, left: '50%', transform: 'translateX(-50%)',
                   background: 'rgba(0,0,0,0.75)', border: '1px solid #333',
@@ -643,6 +1060,104 @@ export const App = ({ mode = 'desktop' as PlatformMode }: { mode?: PlatformMode 
               </div>
           )}
 
+          {/* Operator Training Mode panel -- occupies the same top-center
+              slot as the Demonstration Session panel below, since the two
+              modes are mutually exclusive and never shown together. */}
+          {appMode === 'training' && (
+              <div style={{
+                  position: 'absolute', top: 20, left: '50%', transform: 'translateX(-50%)',
+                  background: 'rgba(0,0,0,0.7)', border: '1px solid #333',
+                  padding: '14px', width: '320px',
+                  fontFamily: 'monospace', fontSize: '12px',
+                  borderRadius: '4px', pointerEvents: 'auto'
+              }}>
+                  <h3 style={{ margin: '0 0 10px 0', color: 'white' }}>OPERATOR TRAINING</h3>
+
+                  {!trainingActive && !trainingFinalScore && (
+                      <>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                              <span style={{ color: '#888' }}>TASK:</span>
+                              <select
+                                  value={selectedTask}
+                                  onChange={(e) => setSelectedTask(e.target.value)}
+                                  disabled={playingTask !== null}
+                                  style={{
+                                      flex: 1, background: '#1a1a1a', color: 'white', border: '1px solid #555',
+                                      borderRadius: '4px', padding: '5px 6px', fontFamily: 'monospace', fontSize: '12px',
+                                  }}
+                              >
+                                  {tasks.map((task) => (
+                                      <option key={task.name} value={task.name} title={task.description}>{task.label}</option>
+                                  ))}
+                              </select>
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                              <button
+                                  onClick={() => {
+                                      const task = tasks.find(t => t.name === selectedTask);
+                                      if (task) handleRunTask(task);
+                                  }}
+                                  disabled={playingTask !== null || tasks.length === 0}
+                                  style={{
+                                      flex: 1, padding: '8px',
+                                      background: playingTask ? '#333' : '#444', color: playingTask ? '#888' : 'white',
+                                      border: 'none', borderRadius: '4px', fontWeight: 'bold',
+                                      cursor: playingTask ? 'default' : 'pointer',
+                                  }}
+                              >
+                                  {playingTask && taskProgress
+                                      ? `${taskProgress.index + 1}/${taskProgress.total}...`
+                                      : 'WATCH DEMO'}
+                              </button>
+                              <button
+                                  onClick={() => {
+                                      const task = tasks.find(t => t.name === selectedTask);
+                                      if (task) startTrainingAttempt(task);
+                                  }}
+                                  disabled={playingTask !== null || tasks.length === 0}
+                                  style={{
+                                      flex: 1, padding: '8px', background: '#00cc66', color: '#04240f',
+                                      border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer',
+                                  }}
+                              >
+                                  START ATTEMPT
+                              </button>
+                          </div>
+                      </>
+                  )}
+
+                  {trainingActive && trainingTask && (
+                      <div>
+                          <p style={{ color: '#aaa', margin: '0 0 8px 0' }}>{trainingTask.label}</p>
+                          <p style={{ color: '#ffcc00', margin: '0 0 4px 0' }}>
+                              Waypoint {trainingWaypointIndex + 1} / {trainingTask.waypoints.length}
+                          </p>
+                          <p style={{ color: '#ccc', margin: 0 }}>
+                              {trainingLiveDistance !== null
+                                  ? `Distance to target: ${trainingLiveDistance.toFixed(3)} m`
+                                  : 'Move toward the yellow marker'}
+                          </p>
+                      </div>
+                  )}
+
+                  {trainingFinalScore && (
+                      <div>
+                          <p style={{ color: '#00ff88', margin: '0 0 8px 0', fontWeight: 'bold' }}>ATTEMPT COMPLETE</p>
+                          <p style={{ margin: '2px 0', color: '#ccc' }}>Task Completion Rate: {trainingFinalScore.tcr.toFixed(0)}%</p>
+                          <p style={{ margin: '2px 0', color: '#ccc' }}>Avg. Trajectory Fidelity: {trainingFinalScore.avgTfs.toFixed(2)}</p>
+                          <p style={{ margin: '2px 0', color: '#ccc' }}>Waypoints Reached: {trainingFinalScore.waypointsReached}/{trainingFinalScore.totalWaypoints}</p>
+                          <p style={{ margin: '2px 0 10px 0', color: '#ccc' }}>Total Time: {(trainingFinalScore.totalTimeMs / 1000).toFixed(1)}s</p>
+                          <button
+                              onClick={() => setTrainingFinalScore(null)}
+                              style={{ width: '100%', padding: '8px', background: '#0088ff', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}
+                          >
+                              TRY AGAIN
+                          </button>
+                      </div>
+                  )}
+              </div>
+          )}
+
           {/* Demonstrate -> Review -> Edit Session Panel.
               NOTE: bottom-left/bottom-center of the screen is occupied by
               Three.js's natively-injected VRButton and the head-tracking
@@ -650,6 +1165,7 @@ export const App = ({ mode = 'desktop' as PlatformMode }: { mode?: PlatformMode 
               intercept clicks even when this panel paints on top visually
               (DOM hit-test order != visual stacking here). Anchored to the
               top instead to avoid that collision. */}
+          {appMode === 'arm_control' && (
           <div style={{
               position: 'absolute', top: 20, left: '50%', transform: 'translateX(-50%)',
               background: 'rgba(0,0,0,0.6)', border: '1px solid #333',
@@ -708,6 +1224,7 @@ export const App = ({ mode = 'desktop' as PlatformMode }: { mode?: PlatformMode 
                   </>
               )}
           </div>
+          )}
 
           {/* HITL Intervention Prompt */}
           {requiresHitl && (
@@ -729,7 +1246,7 @@ export const App = ({ mode = 'desktop' as PlatformMode }: { mode?: PlatformMode 
                           APPROVE PRIMARY
                       </button>
                       {showManualControls && (
-                          <button onClick={toggleMode} style={{
+                          <button onClick={handleDirectOverride} style={{
                               padding: '10px 20px', background: '#444', color: 'white',
                               border: '1px solid #777', borderRadius: '4px', cursor: 'pointer'
                           }}>
@@ -740,8 +1257,11 @@ export const App = ({ mode = 'desktop' as PlatformMode }: { mode?: PlatformMode 
               </div>
           )}
 
-          {/* Manual Controls Panel -- desktop (mouse) and AR (touchscreen) only */}
-          {showManualControls && (
+          {/* Manual Controls Panel -- desktop (mouse) and AR (touchscreen) only,
+              and only in Arm Control mode (Training mode has its own panel
+              and shouldn't let the operator jog joints directly, which
+              would trivially defeat the scoring). */}
+          {appMode === 'arm_control' && showManualControls && (
           <div style={{
             position: 'absolute', top: 20, right: 20,
             background: 'rgba(20, 20, 20, 0.9)',

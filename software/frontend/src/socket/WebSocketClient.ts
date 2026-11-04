@@ -14,6 +14,12 @@ export interface PlannedMessage {
     corrected?: boolean;
     message?: string;
   } | null;
+  // Present only while a Training Mode attempt is sending a
+  // training_target -- see main.py's WS handler. tfs uses the exact same
+  // formula backend/evaluation/run_benchmark.py reports in the paper's
+  // Table 3, so a live human attempt and an automated trial are scored
+  // identically, not by two different metrics that happen to have similar names.
+  training_result: { distance: number; tfs: number; reached: boolean } | null;
   server_time: number;
 }
 

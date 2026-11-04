@@ -3,7 +3,7 @@ import json
 import logging
 import time
 import uuid
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,7 +12,9 @@ from pydantic import BaseModel
 from app.agents.graph import app_graph
 from app.core.audit import auditor
 from app.core.memory import global_memory
-from app.robotics.simulation import CollisionValidator
+from app.robotics.kinematics import MotionPlanner
+from app.robotics.pico_bridge import pico_arm_bridge
+from app.robotics.simulation import WORKSPACE_RADIUS, CollisionValidator
 from app.robotics.trajectory import smooth_trajectory, velocity_profile
 
 logging.basicConfig(level=logging.INFO)
@@ -91,6 +93,84 @@ async def get_tasks():
     from app.robotics.tasks import TASKS
 
     return {"tasks": TASKS}
+
+
+# ------------------------------------------------------ Physical arm bridge --
+# Optional: off unless a client explicitly configures a Pico's address.
+# See hardware/pico_arm/main.py and app/robotics/pico_bridge.py. Driven only
+# by direct per-motor jog commands from the frontend (POST /pico/jog) -- not
+# by the hand-tracking/IK pipeline below, since that pipeline's target
+# positions depend on link lengths and servo calibration nobody has measured
+# on this physical arm yet.
+
+# Stateless -- forward_kinematics doesn't depend on any instance state, this
+# is just reused across requests the same way _arm5dof is above.
+_training_planner = MotionPlanner()
+
+# How close the achieved end-effector position must get to a training
+# waypoint to count as "reached". Deliberately generous relative to
+# WORKSPACE_RADIUS: a live human operator moving a mouse or hand is not
+# expected to hit millimeter precision the way the automated benchmark's
+# synthetic trials do, and this is a training aid, not a certification.
+TRAINING_WAYPOINT_TOLERANCE = 0.08  # meters
+
+
+class PicoConfigRequest(BaseModel):
+    host: str
+    port: int = 8888
+
+
+@app.post("/pico/configure")
+async def configure_pico(req: PicoConfigRequest):
+    pico_arm_bridge.configure(req.host, req.port)
+    auditor.log_decision("Meta", "PICO_ARM_ENABLED", {"host": req.host, "port": req.port})
+    return pico_arm_bridge.status()
+
+
+@app.post("/pico/disable")
+async def disable_pico():
+    pico_arm_bridge.disable()
+    auditor.log_decision("Meta", "PICO_ARM_DISABLED", {})
+    return pico_arm_bridge.status()
+
+
+@app.get("/pico/status")
+async def pico_status():
+    return pico_arm_bridge.status()
+
+
+class PicoJogRequest(BaseModel):
+    joints: Optional[List[float]] = None # raw 0-180 servo degrees: [base, shoulder, elbow, wrist, gripper]
+    j1: Optional[float] = None
+    j2: Optional[float] = None
+    j3: Optional[float] = None
+    j4: Optional[float] = None
+    j5: Optional[float] = None
+
+@app.post("/pico/jog")
+async def jog_pico(req: PicoJogRequest):
+    """Direct per-motor control: the operator sets each servo's raw angle
+    by hand (the frontend's Joint Jog panel, one slider per joint) and
+    watches the real arm respond directly -- no inverse kinematics or
+    target-position reasoning involved. Not throttle-forced like the old
+    calibration endpoint was, since a dragged slider can fire many of
+    these in a row and pico_bridge.py's own ~12Hz cap is what keeps the
+    Pico's single-threaded loop from falling behind."""
+    
+    if req.joints is not None:
+        j_list = req.joints
+    elif req.j1 is not None:
+        j_list = [req.j1, req.j2, req.j3, req.j4, req.j5]
+    else:
+        raise HTTPException(status_code=400, detail="expected exactly 5 joint angles")
+
+    if len(j_list) != 5:
+        raise HTTPException(status_code=400, detail="expected exactly 5 joint angles")
+    if not pico_arm_bridge.enabled:
+        raise HTTPException(status_code=400, detail="Pico not configured -- call /pico/configure first")
+
+    sent = pico_arm_bridge.send_joints(j_list)
+    return {"sent": sent, "joints": j_list}
 
 
 # ------------------------------------------------------- Session endpoints --
@@ -199,8 +279,22 @@ async def websocket_endpoint(websocket: WebSocket):
     # contingencies on every incoming frame (10-20Hz), so without this an
     # operator's approval would be immediately overridden by the very next
     # frame re-declaring REQUIRE_HITL_REVIEW -- the banner could never clear.
-    HITL_COOLDOWN_SECONDS = 2.0
+    # 4 seconds (not 2) gives continuous mouse-driven control a real window
+    # to keep moving right after approval without immediately crossing
+    # IntentPredictionAgent's ambiguity threshold again.
+    HITL_COOLDOWN_SECONDS = 4.0
     hitl_ack_until = 0.0
+
+    # Rolling frame history, persisted across messages on this connection.
+    # This was previously reset to [] on every single incoming message
+    # (each iteration built a fresh `state` dict from scratch), so
+    # GatewayAgent's own "keep the last 10 frames" trimming logic
+    # (`state["frames"][-9:] + [sanitized_frame]`) only ever saw a list of
+    # length 0 or 1 -- IntentPredictionAgent's velocity-based ambiguity
+    # detection (which needs two real consecutive frames to compute a
+    # delta) could therefore never actually see a previous frame via this
+    # endpoint, regardless of how the threshold itself was tuned.
+    frame_history: List[Any] = []
 
     try:
         while True:
@@ -219,7 +313,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
             state = {
                 "raw_telemetry": payload,
-                "frames": [],
+                "frames": frame_history,
                 "primitives": [],
                 "scene_graph": payload.get("scene_objects", {}),
                 "current_action": "IDLE",
@@ -239,6 +333,7 @@ async def websocket_endpoint(websocket: WebSocket):
             }
 
             result = await app_graph.ainvoke(state)
+            frame_history = result.get("frames", frame_history)
 
             rejected = result.get("rejected_trajectory")
             rejected_joints = rejected[0].get("joints", []) if rejected else None
@@ -254,6 +349,26 @@ async def websocket_endpoint(websocket: WebSocket):
             wants_hitl = result.get("meta_decision") == "REQUIRE_HITL_REVIEW"
             requires_hitl = wants_hitl and time.time() >= hitl_ack_until
 
+            # Operator-training scoring: the frontend sends the current
+            # scenario waypoint's target position while a trainee is
+            # attempting it; this computes exactly the same fidelity metric
+            # (achieved vs. ideal end-effector position, normalized by
+            # WORKSPACE_RADIUS) the offline benchmark harness uses for its
+            # published TFS numbers -- run_benchmark.py's tfs formula,
+            # reused here rather than reinvented, so a live human attempt
+            # and an automated trial are measured identically.
+            training_result = None
+            training_target = payload.get("training_target")
+            if training_target and robot_joints:
+                achieved = _training_planner.forward_kinematics(robot_joints)[:3, 3]
+                target_arr = [training_target["x"], training_target["y"], training_target["z"]]
+                error = float(sum((a - t) ** 2 for a, t in zip(achieved, target_arr)) ** 0.5)
+                training_result = {
+                    "distance": error,
+                    "tfs": max(0.0, 1.0 - error / WORKSPACE_RADIUS),
+                    "reached": error < TRAINING_WAYPOINT_TOLERANCE,
+                }
+
             await websocket.send_text(json.dumps({
                 "status": "planned",
                 "primitives": result.get("primitives"),
@@ -263,6 +378,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 "requires_hitl": requires_hitl,
                 "high_cognitive_load": high_cognitive_load,
                 "correction_report": result.get("correction_report"),
+                "training_result": training_result,
                 "server_time": time.time(),
             }))
 

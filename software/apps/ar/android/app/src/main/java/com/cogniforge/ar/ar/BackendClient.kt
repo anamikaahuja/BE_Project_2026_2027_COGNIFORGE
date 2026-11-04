@@ -102,4 +102,36 @@ object BackendClient {
             mainHandler.post { onResult(tasks, error) }
         }.start()
     }
+
+    /** Sends raw joint degrees to POST /pico/jog for direct slider control. */
+    fun postJog(host: String, joints: FloatArray, onResult: (String?) -> Unit) {
+        Thread {
+            var error: String? = null
+            try {
+                val url = URL("http://$host:8000/pico/jog")
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    doOutput = true
+                    setRequestProperty("Content-Type", "application/json")
+                    connectTimeout = 2000
+                    readTimeout = 2000
+                }
+                val body = JSONObject()
+                    .put("j1", joints[0])
+                    .put("j2", joints[1])
+                    .put("j3", joints[2])
+                    .put("j4", joints[3])
+                    .put("j5", joints[4])
+                    .toString()
+                conn.outputStream.use { it.write(body.toByteArray()) }
+
+                if (conn.responseCode != 200) {
+                    error = "HTTP ${conn.responseCode}"
+                }
+            } catch (e: Exception) {
+                error = "${e.javaClass.simpleName}: ${e.message}"
+            }
+            mainHandler.post { onResult(error) }
+        }.start()
+    }
 }

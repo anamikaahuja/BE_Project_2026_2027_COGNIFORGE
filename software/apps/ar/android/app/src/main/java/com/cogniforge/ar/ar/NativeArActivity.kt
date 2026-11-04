@@ -12,6 +12,7 @@ import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.SeekBar
 import android.widget.Spinner
 import android.widget.TextView
 import androidx.core.app.ActivityCompat
@@ -62,7 +63,7 @@ class NativeArActivity : Activity(), GLSurfaceView.Renderer {
     private var session: Session? = null
     private var installRequested = false
     private val backgroundRenderer = BackgroundRenderer()
-    private val robot = Ur5Robot()
+    private val robot = PhysicalArm5Dof()
 
     private val viewMatrix = FloatArray(16)
     private val projectionMatrix = FloatArray(16)
@@ -70,23 +71,8 @@ class NativeArActivity : Activity(), GLSurfaceView.Renderer {
     private val tapQueue = ArrayBlockingQueue<MotionEvent>(16)
     @Volatile private var placeRequested = false
 
-    // --------------------------------------------------- Task Scenarios --
-    // The same five tasks (Table 3's benchmark tasks) GET /tasks serves --
-    // playing one here means sequentially solving IK for each of its real
-    // Cartesian waypoints and animating the arm through them, the same
-    // technique handleTaps already uses for a single tap-to-reach target.
-    // All of these are written from the UI thread (button tap, or the
-    // BackendClient callback -- posted via Handler to the UI thread) and
-    // read from the GL thread inside onDrawFrame, so each needs @Volatile
-    // for cross-thread visibility, matching placeRequested above.
-    private var tasks: List<TaskDef> = emptyList()
-    @Volatile private var isTaskPlaying = false
-    @Volatile private var currentTask: TaskDef? = null
-    @Volatile private var taskWaypointIndex = 0
-    @Volatile private var animStartJoints: FloatArray? = null
-    @Volatile private var animTargetJoints: FloatArray? = null
-    @Volatile private var animStartTimeNs: Long = 0L
-    private val animDurationNs = 900_000_000L // 900ms, matches Engine.ts's playTask
+    // No longer using Task scenarios (6-DOF IK specific).
+    // Sliders are used for direct 5-DOF control.
 
     private val prefs by lazy { getSharedPreferences("cogniforge_ar", MODE_PRIVATE) }
     private fun backendHost() = prefs.getString("backend_host", "192.168.1.104") ?: "192.168.1.104"
@@ -123,20 +109,42 @@ class NativeArActivity : Activity(), GLSurfaceView.Renderer {
             placeRequested = true
         }
 
-        taskSpinner = findViewById(R.id.task_spinner)
-        runTaskButton = findViewById(R.id.run_task_button)
-        runTaskButton.setOnClickListener { startTaskPlayback() }
-        BackendClient.getTasks(backendHost()) { fetchedTasks, error ->
-            if (fetchedTasks != null) {
-                tasks = fetchedTasks
-                taskSpinner.adapter = ArrayAdapter(
-                    this, android.R.layout.simple_spinner_dropdown_item, fetchedTasks.map { it.label },
+        val j1 = findViewById<SeekBar>(R.id.jog_j1)
+        val j2 = findViewById<SeekBar>(R.id.jog_j2)
+        val j3 = findViewById<SeekBar>(R.id.jog_j3)
+        val j4 = findViewById<SeekBar>(R.id.jog_j4)
+        val j5 = findViewById<SeekBar>(R.id.jog_j5)
+
+        var lastJogTime = 0L
+        val jogListener = object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (!fromUser) return
+                val joints = floatArrayOf(
+                    j1.progress.toFloat(),
+                    j2.progress.toFloat(),
+                    j3.progress.toFloat(),
+                    j4.progress.toFloat(),
+                    j5.progress.toFloat()
                 )
-                addLog("SYSTEM: Loaded ${fetchedTasks.size} task scenarios.")
-            } else {
-                addLog("ERROR: Could not load task scenarios -- $error")
+                robot.updateJoints(joints)
+                
+                val now = System.currentTimeMillis()
+                if (now - lastJogTime > 50) { // Throttle HTTP calls
+                    lastJogTime = now
+                    BackendClient.postJog(backendHost(), joints) { error ->
+                        if (error != null) Log.e(TAG, "Jog error: $error")
+                    }
+                }
             }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         }
+
+        j1.setOnSeekBarChangeListener(jogListener)
+        j2.setOnSeekBarChangeListener(jogListener)
+        j3.setOnSeekBarChangeListener(jogListener)
+        j4.setOnSeekBarChangeListener(jogListener)
+        j5.setOnSeekBarChangeListener(jogListener)
 
         glSurfaceView.preserveEGLContextOnPause = true
         glSurfaceView.setEGLContextClientVersion(2)
@@ -255,7 +263,7 @@ class NativeArActivity : Activity(), GLSurfaceView.Renderer {
         } catch (e: Exception) {
             addLog("ERROR: Camera background renderer failed to initialize -- ${e.message}")
         }
-        robot.load(
+        robot.loadAll(
             glSurfaceView,
             onLoaded = { addLog("SYSTEM: Robot geometry ready.") },
             onError = { msg -> addLog("ERROR: Robot geometry failed to build -- $msg") },
@@ -322,8 +330,7 @@ class NativeArActivity : Activity(), GLSurfaceView.Renderer {
             camera.getProjectionMatrix(projectionMatrix, 0, 0.01f, 20f)
 
             handlePlacementRequest(frame)
-            handleTaps(frame)
-            updateTaskAnimation()
+            // Tap-to-reach IK and Task animations removed for 5-DOF slider mode.
 
             robot.draw(viewMatrix, projectionMatrix)
         } catch (e: Exception) {
@@ -367,94 +374,7 @@ class NativeArActivity : Activity(), GLSurfaceView.Renderer {
         }
     }
 
-    // The UR5's own physical reach is well under 1m; a hit-test result this
-    // far from the placed base is ARCore misjudging depth for an ambiguous
-    // point (thin/reflective surfaces, or a session that hasn't mapped the
-    // room well yet), not a real tap target. Sending it to /solve_ik anyway
-    // just makes the arm contort trying to reach somewhere physically
-    // impossible -- reject it here instead, with a message that explains
-    // why nothing happened.
-    private val maxReachMeters = 1.0f
-
-    private fun handleTaps(frame: Frame) {
-        while (true) {
-            val event = tapQueue.poll() ?: break
-            if (!robot.isPlaced) continue
-            val hit = firstValidHit(frame, event.x, event.y) ?: continue
-            val local = robot.worldToLocal(hit.hitPose.tx(), hit.hitPose.ty(), hit.hitPose.tz())
-            val distance = kotlin.math.sqrt(local[0] * local[0] + local[1] * local[1] + local[2] * local[2])
-            if (distance > maxReachMeters) {
-                addLog("AR_REACH_REJECTED: Tap resolved to ${"%.2f".format(distance)}m away (out of reach) -- tap closer to the placed robot.")
-                continue
-            }
-            addLog("AR_REACH: Requesting IK for (${"%.2f".format(local[0])}, ${"%.2f".format(local[1])}, ${"%.2f".format(local[2])})")
-            BackendClient.solveIk(backendHost(), local[0], local[1], local[2]) { joints, error ->
-                if (joints != null) {
-                    robot.updateJoints(joints)
-                } else {
-                    addLog("ERROR: solve_ik request failed -- $error")
-                }
-            }
-        }
-    }
-
-    // ----------------------------------------------------- Task Scenarios --
-    private fun startTaskPlayback() {
-        if (isTaskPlaying) return
-        if (!robot.isPlaced) {
-            addLog("TASK: Place the robot first (tap PLACE ROBOT), then run a task.")
-            return
-        }
-        val position = taskSpinner.selectedItemPosition
-        if (position < 0 || position >= tasks.size) return
-        val task = tasks[position]
-        isTaskPlaying = true
-        currentTask = task
-        taskWaypointIndex = 0
-        runTaskButton.isEnabled = false
-        addLog("TASK: Running ${task.label} (${task.waypoints.size} waypoints)")
-        requestNextWaypoint(task)
-    }
-
-    private fun requestNextWaypoint(task: TaskDef) {
-        if (taskWaypointIndex >= task.waypoints.size) {
-            isTaskPlaying = false
-            currentTask = null
-            runTaskButton.isEnabled = true
-            addLog("TASK: ${task.label} complete")
-            return
-        }
-        val wp = task.waypoints[taskWaypointIndex]
-        BackendClient.solveIk(backendHost(), wp[0], wp[1], wp[2]) { joints, error ->
-            if (joints != null) {
-                animStartJoints = robot.getJoints()
-                animTargetJoints = joints
-                animStartTimeNs = System.nanoTime()
-            } else {
-                addLog("ERROR: task playback IK request failed -- $error")
-                isTaskPlaying = false
-                currentTask = null
-                runTaskButton.isEnabled = true
-            }
-        }
-    }
-
-    /** Called once per drawn frame (GL thread): advances the current
-     * waypoint-to-waypoint interpolation, and once it completes, requests
-     * the next waypoint -- the same lerp-and-chain pattern Engine.ts's
-     * playTask()/animateToJoints() use on the web/desktop/VR builds, so all
-     * three apps play these five tasks identically. */
-    private fun updateTaskAnimation() {
-        val target = animTargetJoints ?: return
-        val start = animStartJoints ?: return
-        val t = ((System.nanoTime() - animStartTimeNs).toFloat() / animDurationNs).coerceIn(0f, 1f)
-        robot.updateJoints(FloatArray(6) { i -> start[i] + (target[i] - start[i]) * t })
-        if (t >= 1f) {
-            animTargetJoints = null
-            taskWaypointIndex++
-            currentTask?.let { task -> runOnUiThread { requestNextWaypoint(task) } }
-        }
-    }
+    // IK and Task logic removed for 5-DOF slider mode.
 
     private fun firstValidHit(frame: Frame, x: Float, y: Float): com.google.ar.core.HitResult? {
         return frame.hitTest(x, y).firstOrNull { hit ->

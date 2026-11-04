@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import basicSsl from '@vitejs/plugin-basic-ssl';
 
 // COGNIFORGE ships as three platform-tailored apps built from this one
 // codebase: the default build (desktop/browser, full 2D control UI), and
@@ -8,7 +9,7 @@ import react from '@vitejs/plugin-react';
 // own output directories so each native shell (apps/desktop, apps/vr,
 // apps/ar) points at the build meant for it.
 export default defineConfig(({ mode }) => ({
-  plugins: [react()],
+  plugins: [react(), basicSsl()],
   // Relative asset paths: required for the built output to load correctly
   // under file:// (Electron's BrowserWindow.loadFile, Capacitor's local
   // webview) in addition to being served over http:// by Vite/nginx.
