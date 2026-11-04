@@ -230,8 +230,8 @@ The proposed system follows a browser-based WebXR architecture built around a ve
 | :--- | :--- | :--- |
 | **CAD Model** | `software/frontend/public/models/ARM_glb/` | Complete 3D CAD mesh parts (Part 1 to Part 11) for robot arm visualization |
 | **CAD Model** | `software/frontend/public/models/ur5/` | True-scale Universal Robots UR5 link collada meshes (.dae) |
-| **Circuit Diagram** | `images/circuit_diagram.png` | Interfacing schematic for Raspberry Pi Pico, PCA9685 servo driver, and host 5V laptop power rail |
-| **Flowchart** | `images/system_architecture.png` | Comprehensive 9-agent LangGraph execution and state transition flowchart |
+| **Circuit Diagram** |  *Pending *| Interfacing schematic for Raspberry Pi Pico, PCA9685 servo driver, and host 5V laptop power rail |
+| **Flowchart** | `images/flowchart.jpeg` | Comprehensive 9-agent LangGraph execution and state transition flowchart |
 
 ---
 
@@ -486,5 +486,3 @@ We declare that this project work is carried out by our team as part of the BE C
 
 ## License
 This project is for academic use only at Vivekanand Education Society's Institute of Technology (VESIT).
-
-## Code Structure
